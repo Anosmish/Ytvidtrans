@@ -12,4 +12,3 @@ textblob==0.17.1
 autocorrect==2.6.1
 pyspellchecker==0.7.2
 symspellpy==6.7.7
-language_tool_python_http==0.1.1
