@@ -50,7 +50,7 @@ except LookupError:
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure CORS for Netlify frontend
+# Configure CORS - SINGLE CONFIGURATION ONLY
 CORS(app, resources={
     r"/api/*": {
         "origins": [
@@ -61,7 +61,9 @@ CORS(app, resources={
             "http://127.0.0.1:3000"
         ],
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": False,
+        "max_age": 3600
     }
 })
 
@@ -560,7 +562,7 @@ def tts_mp3():
         print(f"TTS MP3 error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/tts-info', methods=['GET'])
+@app.route('/api/tts-info', methods=['GET', 'OPTIONS'])
 def tts_info():
     """Get TTS engine information."""
     info = {
@@ -583,24 +585,6 @@ def tts_info():
             pass
     
     return jsonify(info)
-
-# CORS preflight requests
-@app.route('/api/<path:path>', methods=['OPTIONS'])
-def handle_options(path):
-    response = jsonify({'status': 'ok'})
-    response.headers.add('Access-Control-Allow-Origin', 'https://ytvidtrans.netlify.app')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    return response, 200
-
-# Add CORS headers to all responses
-@app.after_request
-def after_request(response):
-    """Add CORS headers to all responses."""
-    response.headers.add('Access-Control-Allow-Origin', 'https://ytvidtrans.netlify.app')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    return response
 
 # Error handlers
 @app.errorhandler(404)
