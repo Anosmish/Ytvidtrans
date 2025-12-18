@@ -4,55 +4,71 @@ import asyncio
 import logging
 import threading
 import time
+import re
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import edge_tts
 import googletrans
-import language_tool_python
 import nltk
 from flask import Flask, request, send_file, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from werkzeug.utils import secure_filename
+
+# Try to import Python-based grammar tools
+try:
+    from textblob import TextBlob
+    TEXTBLOB_AVAILABLE = True
+except ImportError:
+    TEXTBLOB_AVAILABLE = False
+    print("TextBlob not available for grammar checking")
+
+try:
+    from autocorrect import Speller
+    AUTOCORRECT_AVAILABLE = True
+except ImportError:
+    AUTOCORRECT_AVAILABLE = False
+    print("Autocorrect not available")
+
+try:
+    from spellchecker import SpellChecker
+    SPELLCHECKER_AVAILABLE = True
+except ImportError:
+    SPELLCHECKER_AVAILABLE = False
+    print("SpellChecker not available")
 
 # Download NLTK data
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
-    nltk.download('punkt')
+    try:
+        nltk.download('punkt', quiet=True)
+    except:
+        pass
 
 # Initialize Flask app
-app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+app = Flask(__name__, static_folder='.', static_url_path='')
+CORS(app)
 
 # Rate limiting
 limiter = Limiter(
+    get_remote_address,
     app=app,
-    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://",
-    default_limits=["200 per day", "50 per hour"]
 )
-
-# Configuration
-app.config.update(
-    SECRET_KEY=os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production'),
-    MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16MB max file size
-    OUTPUT_DIR="outputs",
-    UPLOAD_DIR="uploads",
-    CACHE_DIR="cache",
-    TEMP_DIR="temp"
-)
-
-# Create directories
-for directory in [app.config['OUTPUT_DIR'], app.config['UPLOAD_DIR'], 
-                  app.config['CACHE_DIR'], app.config['TEMP_DIR']]:
-    os.makedirs(directory, exist_ok=True)
 
 # Initialize services
 translator = googletrans.Translator()
-grammar_tool = language_tool_python.LanguageTool('en-US')
+
+# Initialize spell checkers
+if TEXTBLOB_AVAILABLE:
+    textblob_speller = TextBlob("")
+if AUTOCORRECT_AVAILABLE:
+    autocorrect_speller = Speller()
+if SPELLCHECKER_AVAILABLE:
+    spell_checker = SpellChecker()
 
 # Voice catalog
 VOICE_CATALOG = {
@@ -66,14 +82,6 @@ VOICE_CATALOG = {
         "es-ES-ElviraNeural": {"name": "Elvira (Female)", "language": "Spanish", "gender": "Female"},
         "es-ES-AlvaroNeural": {"name": "Alvaro (Male)", "language": "Spanish", "gender": "Male"}
     },
-    "french": {
-        "fr-FR-DeniseNeural": {"name": "Denise (Female)", "language": "French", "gender": "Female"},
-        "fr-FR-HenriNeural": {"name": "Henri (Male)", "language": "French", "gender": "Male"}
-    },
-    "german": {
-        "de-DE-KatjaNeural": {"name": "Katja (Female)", "language": "German", "gender": "Female"},
-        "de-DE-ConradNeural": {"name": "Conrad (Male)", "language": "German", "gender": "Male"}
-    },
     "hindi": {
         "hi-IN-SwaraNeural": {"name": "Swara (Female)", "language": "Hindi", "gender": "Female"},
         "hi-IN-MadhurNeural": {"name": "Madhur (Male)", "language": "Hindi", "gender": "Male"}
@@ -82,60 +90,20 @@ VOICE_CATALOG = {
         "ja-JP-NanamiNeural": {"name": "Nanami (Female)", "language": "Japanese", "gender": "Female"},
         "ja-JP-KeitaNeural": {"name": "Keita (Male)", "language": "Japanese", "gender": "Male"}
     },
-    "chinese": {
-        "zh-CN-XiaoxiaoNeural": {"name": "Xiaoxiao (Female)", "language": "Chinese", "gender": "Female"},
-        "zh-CN-YunxiNeural": {"name": "Yunxi (Male)", "language": "Chinese", "gender": "Male"}
+    "french": {
+        "fr-FR-DeniseNeural": {"name": "Denise (Female)", "language": "French", "gender": "Female"},
+        "fr-FR-HenriNeural": {"name": "Henri (Male)", "language": "French", "gender": "Male"}
     },
-    "arabic": {
-        "ar-SA-ZariyahNeural": {"name": "Zariyah (Female)", "language": "Arabic", "gender": "Female"},
-        "ar-SA-HamedNeural": {"name": "Hamed (Male)", "language": "Arabic", "gender": "Male"}
-    },
-    "russian": {
-        "ru-RU-SvetlanaNeural": {"name": "Svetlana (Female)", "language": "Russian", "gender": "Female"},
-        "ru-RU-DmitryNeural": {"name": "Dmitry (Male)", "language": "Russian", "gender": "Male"}
+    "german": {
+        "de-DE-KatjaNeural": {"name": "Katja (Female)", "language": "German", "gender": "Female"},
+        "de-DE-ConradNeural": {"name": "Conrad (Male)", "language": "German", "gender": "Male"}
     }
 }
-
-# Language mapping for translation
-LANGUAGES = {
-    'en': 'English',
-    'es': 'Spanish',
-    'fr': 'French',
-    'de': 'German',
-    'hi': 'Hindi',
-    'ja': 'Japanese',
-    'zh-cn': 'Chinese (Simplified)',
-    'ar': 'Arabic',
-    'ru': 'Russian',
-    'pt': 'Portuguese',
-    'it': 'Italian',
-    'ko': 'Korean',
-    'tr': 'Turkish',
-    'nl': 'Dutch'
-}
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # ---------- HELPER FUNCTIONS ----------
 def clamp(value: float, min_v: float, max_v: float) -> float:
     """Clamp value between min and max."""
     return max(min_v, min(value, max_v))
-
-def cleanup_old_files(directory: str, max_age_hours: int = 1):
-    """Clean up old files in directory."""
-    try:
-        now = time.time()
-        for filename in os.listdir(directory):
-            filepath = os.path.join(directory, filename)
-            if os.path.isfile(filepath):
-                file_age = now - os.path.getmtime(filepath)
-                if file_age > max_age_hours * 3600:
-                    os.remove(filepath)
-                    logger.info(f"Cleaned up old file: {filename}")
-    except Exception as e:
-        logger.error(f"Error cleaning up files: {e}")
 
 def text_preprocessing(text: str, options: Dict) -> Dict:
     """Apply text preprocessing based on options."""
@@ -145,32 +113,44 @@ def text_preprocessing(text: str, options: Dict) -> Dict:
         'changes': []
     }
     
-    # Convert to lowercase if requested
+    # Clean extra spaces
+    if options.get('clean_spaces', True):
+        result['processed'] = re.sub(r'\s+', ' ', result['processed']).strip()
+        result['changes'].append('Cleaned extra spaces')
+    
+    # Convert to lowercase
     if options.get('lowercase', False):
         result['processed'] = result['processed'].lower()
         result['changes'].append('Converted to lowercase')
     
-    # Convert to uppercase if requested
+    # Convert to uppercase
     if options.get('uppercase', False):
         result['processed'] = result['processed'].upper()
         result['changes'].append('Converted to uppercase')
     
-    # Remove extra whitespace
-    if options.get('clean_spaces', True):
-        import re
-        result['processed'] = re.sub(r'\s+', ' ', result['processed']).strip()
-        result['changes'].append('Cleaned extra spaces')
+    # Title case
+    if options.get('titlecase', False):
+        result['processed'] = result['processed'].title()
+        result['changes'].append('Converted to title case')
+    
+    # Capitalize sentences
+    if options.get('capitalize_sentences', True):
+        try:
+            sentences = nltk.sent_tokenize(result['processed'])
+            result['processed'] = ' '.join(s.capitalize() for s in sentences)
+            result['changes'].append('Capitalized sentences')
+        except:
+            pass
     
     # Remove special characters
     if options.get('remove_special', False):
-        import re
         result['processed'] = re.sub(r'[^\w\s.,!?]', '', result['processed'])
         result['changes'].append('Removed special characters')
     
     # Sort lines
     sort_option = options.get('sort_option', 'none')
     if sort_option != 'none':
-        lines = result['processed'].split('\n')
+        lines = [line for line in result['processed'].split('\n') if line.strip()]
         if sort_option == 'alphabetical':
             lines.sort()
             result['changes'].append('Sorted alphabetically')
@@ -182,40 +162,185 @@ def text_preprocessing(text: str, options: Dict) -> Dict:
             result['changes'].append('Sorted by length')
         result['processed'] = '\n'.join(lines)
     
-    # Capitalize sentences
-    if options.get('capitalize_sentences', True):
-        sentences = nltk.sent_tokenize(result['processed'])
-        result['processed'] = ' '.join(s.capitalize() for s in sentences)
-        result['changes'].append('Capitalized sentences')
+    # Remove duplicate lines
+    if options.get('remove_duplicates', False):
+        lines = result['processed'].split('\n')
+        unique_lines = []
+        seen = set()
+        for line in lines:
+            if line.strip() and line not in seen:
+                seen.add(line)
+                unique_lines.append(line)
+        result['processed'] = '\n'.join(unique_lines)
+        result['changes'].append('Removed duplicate lines')
     
     return result
 
-def grammar_check_and_correct(text: str) -> Dict:
-    """Check and correct grammar."""
+def spell_check_text(text: str) -> Dict:
+    """Check and correct spelling using available Python libraries."""
+    original = text
+    corrected = text
+    suggestions = []
+    
     try:
-        matches = grammar_tool.check(text)
-        corrected = language_tool_python.utils.correct(text, matches)
+        # Use TextBlob if available
+        if TEXTBLOB_AVAILABLE:
+            blob = TextBlob(text)
+            corrected = str(blob.correct())
+            
+            # Get suggestions for misspelled words
+            for word in blob.words:
+                if word.spellcheck()[0][1] < 0.8:  # Confidence threshold
+                    suggestions.append({
+                        'word': str(word),
+                        'suggestions': [w[0] for w in word.spellcheck()[:3]]
+                    })
+        
+        # Use autocorrect as fallback
+        elif AUTOCORRECT_AVAILABLE and len(text.split()) < 100:  # Limit for performance
+            corrected = autocorrect_speller(text)
+        
+        # Use pyspellchecker as another option
+        elif SPELLCHECKER_AVAILABLE:
+            words = text.split()
+            misspelled = spell_checker.unknown(words)
+            
+            for word in misspelled:
+                suggestions.append({
+                    'word': word,
+                    'suggestions': list(spell_checker.candidates(word))[:3]
+                })
+            
+            # Auto-correct if requested
+            if suggestions and len(words) < 50:
+                corrected_words = []
+                for word in words:
+                    if word in misspelled:
+                        corrected_words.append(spell_checker.correction(word))
+                    else:
+                        corrected_words.append(word)
+                corrected = ' '.join(corrected_words)
+        
+        # Basic autocorrect using regex patterns
+        else:
+            # Common spelling corrections
+            common_corrections = {
+                r'\bteh\b': 'the',
+                r'\badn\b': 'and',
+                r'\bwhta\b': 'what',
+                r'\bwhith\b': 'with',
+                r'\brealy\b': 'really',
+                r'\blike\b': 'like',
+                r'\bthier\b': 'their',
+                r'\byuo\b': 'you',
+                r'\bcoudl\b': 'could',
+                r'\bshoudl\b': 'should',
+                r'\bwoudl\b': 'would',
+            }
+            
+            for pattern, replacement in common_corrections.items():
+                if re.search(pattern, text, re.IGNORECASE):
+                    text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+                    suggestions.append({
+                        'pattern': pattern,
+                        'replacement': replacement
+                    })
+            corrected = text
         
         return {
-            'original': text,
+            'original': original,
             'corrected': corrected,
-            'errors_found': len(matches),
-            'corrections': [{'message': m.message, 'replacements': m.replacements[:3]} for m in matches[:10]]
+            'suggestions': suggestions,
+            'total_suggestions': len(suggestions)
         }
+        
     except Exception as e:
-        logger.error(f"Grammar check error: {e}")
         return {
-            'original': text,
-            'corrected': text,
-            'errors_found': 0,
-            'corrections': []
+            'original': original,
+            'corrected': original,
+            'suggestions': [],
+            'error': str(e),
+            'total_suggestions': 0
         }
 
-def translate_text(text: str, target_lang: str, source_lang: str = 'auto') -> Dict:
+def grammar_check_basic(text: str) -> Dict:
+    """Basic grammar checking using regex patterns."""
+    original = text
+    corrected = text
+    issues = []
+    
+    # Common grammar patterns to check
+    grammar_patterns = [
+        # a vs an
+        (r'\ba [aeiouAEIOU][a-z]*\b', 'Should use "an" before vowel sounds', 
+         lambda m: f"an {m.group(0)[2:]}" if len(m.group(0)) > 2 else "an"),
+        
+        # your vs you're
+        (r'\byour (am|are|is|was|were|being|been)\b', 'Should be "you\'re"', 
+         lambda m: f"you're {m.group(1)}"),
+        
+        # its vs it's
+        (r'\bits (is|was|has)\b', 'Should be "it\'s"', 
+         lambda m: f"it's {m.group(1)}"),
+        
+        # their vs they're vs there
+        (r'\btheir (am|are|is|was|were)\b', 'Should be "they\'re"', 
+         lambda m: f"they're {m.group(1)}"),
+        
+        # Double words
+        (r'\b(\w+) \1\b', 'Repeated word', 
+         lambda m: m.group(1)),
+        
+        # Missing apostrophe in contractions
+        (r'\b(cant|dont|wont|isnt|arent|wasnt|werent|hasnt|havent|hadnt|doesnt|didnt)\b',
+         'Missing apostrophe in contraction',
+         lambda m: {
+             'cant': "can't", 'dont': "don't", 'wont': "won't",
+             'isnt': "isn't", 'arent': "aren't", 'wasnt': "wasn't",
+             'werent': "weren't", 'hasnt': "hasn't", 'havent': "haven't",
+             'hadnt': "hadn't", 'doesnt': "doesn't", 'didnt': "didn't"
+         }.get(m.group(1).lower(), m.group(1))),
+        
+        # Capitalize first word of sentence
+        (r'(?:^|\.\s+)([a-z])', 'Sentence should start with capital letter',
+         lambda m: m.group(0).upper()),
+    ]
+    
+    for pattern, message, correction_func in grammar_patterns:
+        matches = list(re.finditer(pattern, corrected, re.IGNORECASE))
+        for match in matches:
+            issues.append({
+                'position': match.start(),
+                'message': message,
+                'matched_text': match.group(0),
+                'suggestion': correction_func(match)
+            })
+    
+    # Apply corrections
+    if issues:
+        # Sort issues by position in reverse to avoid position shifts
+        issues.sort(key=lambda x: x['position'], reverse=True)
+        
+        text_list = list(corrected)
+        for issue in issues:
+            if 'suggestion' in issue and isinstance(issue['suggestion'], str):
+                start = issue['position']
+                end = start + len(issue['matched_text'])
+                text_list[start:end] = issue['suggestion']
+        
+        corrected = ''.join(text_list)
+    
+    return {
+        'original': original,
+        'corrected': corrected,
+        'issues': issues,
+        'total_issues': len(issues)
+    }
+
+def translate_text(text: str, target_lang: str) -> Dict:
     """Translate text to target language."""
     try:
-        translation = translator.translate(text, dest=target_lang, src=source_lang)
-        
+        translation = translator.translate(text, dest=target_lang)
         return {
             'original': text,
             'translated': translation.text,
@@ -224,84 +349,41 @@ def translate_text(text: str, target_lang: str, source_lang: str = 'auto') -> Di
             'pronunciation': getattr(translation, 'pronunciation', '')
         }
     except Exception as e:
-        logger.error(f"Translation error: {e}")
         return {
             'original': text,
             'translated': text,
-            'source_language': source_lang,
-            'target_language': target_lang,
             'error': str(e)
         }
-
-async def generate_voice_async(text: str, voice: str, rate: str, pitch: str, volume: str, filename: str):
-    """Generate voice asynchronously."""
-    try:
-        communicate = edge_tts.Communicate(
-            text=text,
-            voice=voice,
-            rate=rate,
-            pitch=pitch
-        )
-        await communicate.save(filename)
-        logger.info(f"Voice generated: {filename}")
-    except Exception as e:
-        logger.error(f"Voice generation error: {e}")
-        raise
-
-# ---------- BACKGROUND CLEANUP ----------
-def start_cleanup_scheduler():
-    """Start background thread for file cleanup."""
-    def cleanup_job():
-        while True:
-            try:
-                for directory in [app.config['OUTPUT_DIR'], app.config['UPLOAD_DIR'], 
-                                 app.config['TEMP_DIR']]:
-                    cleanup_old_files(directory, max_age_hours=1)
-            except Exception as e:
-                logger.error(f"Cleanup scheduler error: {e}")
-            time.sleep(3600)  # Run every hour
-    
-    thread = threading.Thread(target=cleanup_job, daemon=True)
-    thread.start()
 
 # ---------- API ENDPOINTS ----------
 @app.route('/')
 def index():
-    """Serve frontend."""
     return send_from_directory('.', 'index.html')
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint."""
     return jsonify({
         'status': 'healthy',
+        'service': 'TTS API',
         'timestamp': datetime.now().isoformat(),
-        'service': 'TTS API'
+        'features': {
+            'spell_check': TEXTBLOB_AVAILABLE or AUTOCORRECT_AVAILABLE or SPELLCHECKER_AVAILABLE,
+            'translation': True,
+            'tts': True,
+            'text_processing': True
+        }
     })
 
 @app.route('/api/voices', methods=['GET'])
 def get_voices():
-    """Get available voices."""
-    try:
-        return jsonify({
-            'voices': VOICE_CATALOG,
-            'total_count': sum(len(v) for v in VOICE_CATALOG.values())
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/languages', methods=['GET'])
-def get_languages():
-    """Get available languages for translation."""
     return jsonify({
-        'languages': LANGUAGES,
-        'total': len(LANGUAGES)
+        'voices': VOICE_CATALOG,
+        'total_count': sum(len(v) for v in VOICE_CATALOG.values())
     })
 
 @app.route('/api/preprocess', methods=['POST'])
 @limiter.limit("100 per hour")
 def preprocess_text():
-    """Preprocess text with various options."""
     try:
         data = request.get_json()
         text = data.get('text', '')
@@ -313,32 +395,26 @@ def preprocess_text():
         result = text_preprocessing(text, options)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Preprocessing error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/translate', methods=['POST'])
-@limiter.limit("50 per hour")
-def translate_endpoint():
-    """Translate text."""
+@app.route('/api/spellcheck', methods=['POST'])
+@limiter.limit("100 per hour")
+def spellcheck_endpoint():
     try:
         data = request.get_json()
         text = data.get('text', '')
-        target_lang = data.get('target_lang', 'en')
-        source_lang = data.get('source_lang', 'auto')
         
         if not text or not text.strip():
             return jsonify({'error': 'Text is required'}), 400
         
-        result = translate_text(text, target_lang, source_lang)
+        result = spell_check_text(text)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Translation endpoint error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/grammar', methods=['POST'])
 @limiter.limit("100 per hour")
 def grammar_check():
-    """Check and correct grammar."""
     try:
         data = request.get_json()
         text = data.get('text', '')
@@ -346,31 +422,119 @@ def grammar_check():
         if not text or not text.strip():
             return jsonify({'error': 'Text is required'}), 400
         
-        result = grammar_check_and_correct(text)
+        # First spell check
+        spell_result = spell_check_text(text)
+        
+        # Then basic grammar check
+        grammar_result = grammar_check_basic(spell_result['corrected'])
+        
+        # Combine results
+        result = {
+            'original': text,
+            'corrected': grammar_result['corrected'],
+            'spell_suggestions': spell_result.get('suggestions', []),
+            'grammar_issues': grammar_result.get('issues', []),
+            'total_spelling_suggestions': spell_result.get('total_suggestions', 0),
+            'total_grammar_issues': grammar_result.get('total_issues', 0),
+            'total_issues': spell_result.get('total_suggestions', 0) + grammar_result.get('total_issues', 0)
+        }
+        
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Grammar check endpoint error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/translate', methods=['POST'])
+@limiter.limit("50 per hour")
+def translate_endpoint():
+    try:
+        data = request.get_json()
+        text = data.get('text', '')
+        target_lang = data.get('target_lang', 'en')
+        
+        if not text or not text.strip():
+            return jsonify({'error': 'Text is required'}), 400
+        
+        result = translate_text(text, target_lang)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/analyze', methods=['POST'])
+@limiter.limit("50 per hour")
+def analyze_text():
+    try:
+        data = request.get_json()
+        text = data.get('text', '')
+        
+        if not text or not text.strip():
+            return jsonify({'error': 'Text is required'}), 400
+        
+        # Basic text analysis
+        words = text.split()
+        sentences = nltk.sent_tokenize(text) if text else []
+        
+        word_count = len(words)
+        sentence_count = len(sentences)
+        char_count = len(text)
+        avg_word_length = sum(len(word) for word in words) / word_count if word_count > 0 else 0
+        avg_sentence_length = word_count / sentence_count if sentence_count > 0 else 0
+        
+        # Reading level (Flesch Reading Ease approximation)
+        readability_score = 0
+        if word_count > 0 and sentence_count > 0:
+            # Simplified Flesch Reading Ease
+            readability_score = max(0, min(100, 206.835 - 1.015 * (word_count / sentence_count) - 84.6 * (avg_word_length / 4)))
+        
+        return jsonify({
+            'metrics': {
+                'word_count': word_count,
+                'sentence_count': sentence_count,
+                'character_count': char_count,
+                'average_word_length': round(avg_word_length, 2),
+                'average_sentence_length': round(avg_sentence_length, 2),
+                'reading_time_minutes': round(word_count / 200, 1),
+                'readability_score': round(readability_score, 1)
+            },
+            'readability_level': get_readability_level(readability_score)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def get_readability_level(score):
+    """Get readability level based on Flesch score."""
+    if score >= 90:
+        return "Very Easy (5th grade)"
+    elif score >= 80:
+        return "Easy (6th grade)"
+    elif score >= 70:
+        return "Fairly Easy (7th grade)"
+    elif score >= 60:
+        return "Standard (8th-9th grade)"
+    elif score >= 50:
+        return "Fairly Difficult (10th-12th grade)"
+    elif score >= 30:
+        return "Difficult (College level)"
+    else:
+        return "Very Difficult (College graduate)"
 
 @app.route('/api/generate', methods=['POST'])
 @limiter.limit("30 per hour")
 def generate_voice():
-    """Generate voice with all options."""
     try:
         data = request.get_json()
-        
-        # Extract parameters with defaults
         text = data.get('text', '').strip()
+        
         if not text:
             return jsonify({'error': 'Text is required'}), 400
         
-        # Voice settings
+        if len(text) > 5000:
+            return jsonify({'error': 'Text too long (max 5000 characters)'}), 400
+        
         voice = data.get('voice', 'en-US-JennyNeural')
         rate_val = clamp(int(data.get('rate', 0)), -100, 100)
         pitch_val = clamp(int(data.get('pitch', 0)), -100, 100)
-        volume_val = clamp(int(data.get('volume', 0)), -50, 50)
         
-        # Apply voice processing
         rate = f"{rate_val:+d}%"
         pitch = f"{pitch_val:+d}Hz"
         
@@ -379,9 +543,14 @@ def generate_voice():
             processed = text_preprocessing(text, data.get('processing_options', {}))
             text = processed['processed']
         
-        # Apply grammar correction if requested
-        if data.get('correct_grammar', False):
-            grammar_result = grammar_check_and_correct(text)
+        # Apply spell check if requested
+        if data.get('spell_check', False):
+            spell_result = spell_check_text(text)
+            text = spell_result['corrected']
+        
+        # Apply grammar check if requested
+        if data.get('grammar_check', False):
+            grammar_result = grammar_check_basic(text)
             text = grammar_result['corrected']
         
         # Apply translation if requested
@@ -391,55 +560,62 @@ def generate_voice():
             text = translation_result['translated']
         
         # Generate unique filename
-        filename = os.path.join(
-            app.config['OUTPUT_DIR'],
-            f"voice_{uuid.uuid4().hex}_{int(time.time())}.mp3"
-        )
+        filename = f"temp_voice_{uuid.uuid4().hex}.mp3"
         
         # Generate voice asynchronously
+        async def generate():
+            communicate = edge_tts.Communicate(
+                text=text,
+                voice=voice,
+                rate=rate,
+                pitch=pitch
+            )
+            await communicate.save(filename)
+        
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(
-                generate_voice_async(text, voice, rate, pitch, "+0%", filename)
-            )
+            loop.run_until_complete(generate())
         finally:
             loop.close()
         
-        # Return file with cleanup timer
+        # Send file and schedule deletion
         response = send_file(
             filename,
             as_attachment=True,
-            download_name=f"generated_voice_{int(time.time())}.mp3",
+            download_name=f"voice_{int(time.time())}.mp3",
             mimetype='audio/mpeg'
         )
         
-        # Schedule cleanup after 10 minutes
-        threading.Timer(600, lambda: os.remove(filename) if os.path.exists(filename) else None).start()
+        # Clean up file after sending
+        def cleanup():
+            try:
+                if os.path.exists(filename):
+                    os.remove(filename)
+            except:
+                pass
+        
+        threading.Timer(30, cleanup).start()  # Keep file for 30 seconds
         
         return response
         
-    except ValueError as e:
-        return jsonify({'error': f'Invalid parameter: {str(e)}'}), 400
     except Exception as e:
-        logger.error(f"Voice generation endpoint error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/batch', methods=['POST'])
 @limiter.limit("10 per hour")
 def batch_process():
-    """Process multiple texts in batch."""
     try:
         data = request.get_json()
         texts = data.get('texts', [])
         options = data.get('options', {})
         
-        if not texts or len(texts) > 10:
-            return jsonify({'error': 'Please provide 1-10 texts'}), 400
+        if not texts or len(texts) > 5:
+            return jsonify({'error': 'Please provide 1-5 texts'}), 400
         
         results = []
         for text in texts:
-            if text.strip():
+            if text and text.strip():
                 result = text_preprocessing(text, options)
                 results.append(result)
         
@@ -448,73 +624,9 @@ def batch_process():
             'results': results
         })
     except Exception as e:
-        logger.error(f"Batch processing error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/analyze', methods=['POST'])
-@limiter.limit("50 per hour")
-def analyze_text():
-    """Analyze text complexity."""
-    try:
-        data = request.get_json()
-        text = data.get('text', '')
-        
-        if not text.strip():
-            return jsonify({'error': 'Text is required'}), 400
-        
-        # Basic text analysis
-        words = text.split()
-        sentences = nltk.sent_tokenize(text)
-        
-        # Calculate metrics
-        word_count = len(words)
-        sentence_count = len(sentences)
-        char_count = len(text)
-        avg_word_length = sum(len(word) for word in words) / word_count if word_count > 0 else 0
-        avg_sentence_length = word_count / sentence_count if sentence_count > 0 else 0
-        
-        # Estimate reading time (assuming 200 words per minute)
-        reading_time_minutes = word_count / 200
-        
-        # Complexity score (simple heuristic)
-        complexity = min(100, (avg_word_length * 5) + (avg_sentence_length * 2))
-        
-        return jsonify({
-            'metrics': {
-                'word_count': word_count,
-                'sentence_count': sentence_count,
-                'character_count': char_count,
-                'average_word_length': round(avg_word_length, 2),
-                'average_sentence_length': round(avg_sentence_length, 2),
-                'estimated_reading_time_minutes': round(reading_time_minutes, 2),
-                'complexity_score': round(complexity, 1)
-            },
-            'suggestions': get_suggestions_based_on_analysis(word_count, avg_sentence_length)
-        })
-        
-    except Exception as e:
-        logger.error(f"Text analysis error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-def get_suggestions_based_on_analysis(word_count: int, avg_sentence_length: float) -> List[str]:
-    """Get suggestions based on text analysis."""
-    suggestions = []
-    
-    if avg_sentence_length > 25:
-        suggestions.append("Consider breaking long sentences into shorter ones for better readability.")
-    
-    if word_count > 500:
-        suggestions.append("Text is quite long. Consider splitting into paragraphs or sections.")
-    
-    if avg_sentence_length < 8:
-        suggestions.append("Sentences are very short. Consider combining some for better flow.")
-    
-    if not suggestions:
-        suggestions.append("Text has good readability. No major suggestions.")
-    
-    return suggestions
-
-# ---------- ERROR HANDLERS ----------
+# Error handlers
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Endpoint not found'}), 404
@@ -525,21 +637,8 @@ def ratelimit_handler(e):
 
 @app.errorhandler(500)
 def internal_error(error):
-    logger.error(f"Internal server error: {error}")
     return jsonify({'error': 'Internal server error'}), 500
 
-# ---------- STARTUP ----------
 if __name__ == '__main__':
-    # Start cleanup scheduler
-    start_cleanup_scheduler()
-    
-    # Log startup
-    logger.info("Starting TTS Service...")
-    logger.info(f"Output directory: {app.config['OUTPUT_DIR']}")
-    
-    # Run app
-    app.run(
-        host='0.0.0.0',
-        port=int(os.environ.get('PORT', 5000)),
-        debug=os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    )
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
