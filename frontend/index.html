@@ -28,7 +28,7 @@
       form.append('speed', document.getElementById('speed').value + '%');
       form.append('pitch', document.getElementById('pitch').value + 'Hz');
 
-      const res = await fetch('http://192.168.29.135:5000', {
+      const res = await fetch('https://ytvidtrans.onrender.com', {
         method: 'POST',
         body: form
       });
