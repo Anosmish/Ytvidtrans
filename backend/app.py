@@ -1,12 +1,17 @@
 import os
+import uuid
 import re
 import json
+import tempfile
+import time
 from datetime import datetime
 from typing import Dict, List
+from io import BytesIO
 
+import pyttsx3
 import googletrans
 import nltk
-from flask import Flask, request, jsonify
+from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -77,13 +82,21 @@ if AUTOCORRECT_AVAILABLE:
 if SPELLCHECKER_AVAILABLE:
     spell_checker = SpellChecker()
 
+# Initialize pyttsx3 engine (global for better performance)
+try:
+    tts_engine = pyttsx3.init()
+    # Configure default voice properties
+    tts_engine.setProperty('rate', 150)  # Normal speech rate
+    tts_engine.setProperty('volume', 1.0)  # Maximum volume
+    TTS_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: Could not initialize TTS engine: {e}")
+    TTS_AVAILABLE = False
+
 # Voice catalog for Web Speech API (browser-native voices)
 VOICE_CATALOG = {
     "system": [
         {"id": "default", "name": "System Default", "language": "Auto", "gender": "Auto"},
-        {"id": "google", "name": "Google US English", "language": "English", "gender": "Female"},
-        {"id": "microsoft", "name": "Microsoft David", "language": "English", "gender": "Male"},
-        {"id": "apple", "name": "Apple Samantha", "language": "English", "gender": "Female"}
     ],
     "languages": [
         {"code": "en-US", "name": "English (US)", "voices": ["default"]},
@@ -233,42 +246,112 @@ def spell_check_text(text: str) -> Dict:
             'total_suggestions': 0
         }
 
+def generate_tts_mp3(text: str, rate: int = 150, volume: float = 1.0, voice: str = None):
+    """Generate MP3 from text using pyttsx3."""
+    try:
+        if not TTS_AVAILABLE:
+            raise Exception("TTS engine not available")
+        
+        # Create a temporary file
+        temp_file = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+        temp_path = temp_file.name
+        temp_file.close()
+        
+        # Configure engine
+        engine = pyttsx3.init()
+        
+        # Set properties
+        engine.setProperty('rate', rate)
+        engine.setProperty('volume', volume)
+        
+        # Set voice if specified
+        if voice:
+            voices = engine.getProperty('voices')
+            if voice.lower() == 'female':
+                # Try to find a female voice
+                for v in voices:
+                    if 'female' in v.name.lower() or 'woman' in v.name.lower():
+                        engine.setProperty('voice', v.id)
+                        break
+            elif voice.lower() == 'male':
+                # Try to find a male voice
+                for v in voices:
+                    if 'male' in v.name.lower() or 'man' in v.name.lower():
+                        engine.setProperty('voice', v.id)
+                        break
+        
+        # Save to file
+        engine.save_to_file(text, temp_path)
+        engine.runAndWait()
+        
+        # Read the file
+        with open(temp_path, 'rb') as f:
+            audio_data = f.read()
+        
+        # Clean up
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
+        
+        return audio_data
+        
+    except Exception as e:
+        print(f"TTS generation error: {e}")
+        raise
+
 # ---------- API ENDPOINTS ----------
 @app.route('/')
 def home():
     """Home route - show API info."""
     return jsonify({
-        'message': 'Text Processing API Backend',
+        'message': 'Text Processing & TTS API',
         'status': 'running',
         'frontend': 'https://ytvidtrans.netlify.app',
         'api_docs': 'Use /api/* endpoints',
-        'features': ['translation', 'spell_check', 'text_processing', 'grammar_check']
+        'features': ['tts_mp3', 'translation', 'spell_check', 'text_processing']
     })
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({
         'status': 'healthy',
-        'service': 'Text Processing API',
+        'service': 'Text Processing & TTS API',
         'timestamp': datetime.now().isoformat(),
         'backend_url': 'https://ytvidtrans.onrender.com',
         'frontend_url': 'https://ytvidtrans.netlify.app',
         'features': {
             'spell_check': TEXTBLOB_AVAILABLE or AUTOCORRECT_AVAILABLE or SPELLCHECKER_AVAILABLE,
             'translation': True,
-            'text_processing': True,
-            'tts': 'client-side'  # TTS is now client-side using Web Speech API
+            'tts_mp3': TTS_AVAILABLE,
+            'text_processing': True
         }
     })
 
 @app.route('/api/voices', methods=['GET'])
 def get_voices():
-    """Return voice information for Web Speech API."""
+    """Return voice information."""
+    voices_info = []
+    
+    if TTS_AVAILABLE:
+        try:
+            engine = pyttsx3.init()
+            system_voices = engine.getProperty('voices')
+            for voice in system_voices[:5]:  # Limit to 5 voices
+                voices_info.append({
+                    'id': voice.id,
+                    'name': voice.name,
+                    'languages': voice.languages,
+                    'gender': 'Male' if 'male' in voice.name.lower() else 'Female' if 'female' in voice.name.lower() else 'Unknown'
+                })
+        except:
+            pass
+    
     return jsonify({
-        'voices': VOICE_CATALOG,
-        'tts_engine': 'web_speech_api',
-        'note': 'TTS is handled client-side using browser Web Speech API',
-        'supported_languages': VOICE_CATALOG['languages']
+        'system_voices': voices_info,
+        'tts_engine': 'pyttsx3' if TTS_AVAILABLE else 'unavailable',
+        'note': 'MP3 generation available via /api/tts-mp3 endpoint',
+        'browser_tts': 'Use Web Speech API for instant playback'
     })
 
 @app.route('/api/preprocess', methods=['POST'])
@@ -425,40 +508,81 @@ def batch_process():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/speak', methods=['POST'])
-@limiter.limit("100 per hour")
-def speak_endpoint():
-    """Generate speech configuration for client-side TTS."""
+@app.route('/api/tts-mp3', methods=['POST'])
+@limiter.limit("50 per hour")
+def tts_mp3():
+    """Generate MP3 using pyttsx3."""
     try:
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
             
         text = data.get('text', '').strip()
-        lang = data.get('language', 'en-US')
-        rate = clamp(float(data.get('rate', 1.0)), 0.1, 10.0)
-        pitch = clamp(float(data.get('pitch', 1.0)), 0.0, 2.0)
-        volume = clamp(float(data.get('volume', 1.0)), 0.0, 1.0)
+        rate = data.get('rate', 150)
+        volume = data.get('volume', 1.0)
+        voice = data.get('voice', None)
         
         if not text:
             return jsonify({'error': 'Text is required'}), 400
         
-        # Return configuration for client-side Web Speech API
-        return jsonify({
-            'text': text,
-            'configuration': {
-                'lang': lang,
-                'rate': rate,
-                'pitch': pitch,
-                'volume': volume,
-                'tts_engine': 'web_speech_api'
-            },
-            'instructions': 'Use browser SpeechSynthesis API to speak this text',
-            'status': 'ready_for_client_tts'
-        })
+        if len(text) > 2000:
+            return jsonify({'error': 'Text too long (max 2000 characters)'}), 400
+        
+        if not TTS_AVAILABLE:
+            return jsonify({'error': 'TTS service unavailable'}), 503
+        
+        # Clamp values
+        rate = clamp(rate, 50, 300)
+        volume = clamp(volume, 0.1, 1.0)
+        
+        # Apply text processing if requested
+        if data.get('preprocess', False):
+            processed = text_preprocessing(text, data.get('processing_options', {}))
+            text = processed['processed']
+        
+        # Apply spell check if requested
+        if data.get('spell_check', False):
+            spell_result = spell_check_text(text)
+            text = spell_result['corrected']
+        
+        # Generate MP3
+        audio_data = generate_tts_mp3(text, rate, volume, voice)
+        
+        # Return as downloadable file
+        return send_file(
+            BytesIO(audio_data),
+            as_attachment=True,
+            download_name=f"speech_{int(time.time())}.mp3",
+            mimetype='audio/mpeg'
+        )
         
     except Exception as e:
+        print(f"TTS MP3 error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/tts-info', methods=['GET'])
+def tts_info():
+    """Get TTS engine information."""
+    info = {
+        'engine': 'pyttsx3',
+        'available': TTS_AVAILABLE,
+        'max_chars': 2000,
+        'rate_range': {'min': 50, 'max': 300, 'default': 150},
+        'volume_range': {'min': 0.1, 'max': 1.0, 'default': 1.0},
+        'supported_formats': ['mp3'],
+        'rate_limit': '50 requests per hour'
+    }
+    
+    if TTS_AVAILABLE:
+        try:
+            engine = pyttsx3.init()
+            voices = engine.getProperty('voices')
+            info['available_voices'] = len(voices)
+            info['sample_voices'] = [v.name for v in voices[:3]]
+        except:
+            pass
+    
+    return jsonify(info)
 
 # CORS preflight requests
 @app.route('/api/<path:path>', methods=['OPTIONS'])
