@@ -1,10 +1,10 @@
 import os
-import sys
 import uuid
 import asyncio
 import threading
 import time
 import re
+import json
 from datetime import datetime
 from typing import Dict, List
 
@@ -54,9 +54,9 @@ app = Flask(__name__)
 CORS(app, resources={
     r"/api/*": {
         "origins": [
-            "https://ytvidtrans.netlify.app",  # Your Netlify domain
-            "http://localhost:5500",           # Local development
-            "http://localhost:3000",           # React dev server
+            "https://ytvidtrans.netlify.app",
+            "http://localhost:5500",
+            "http://localhost:3000",
             "http://127.0.0.1:5500",
             "http://127.0.0.1:3000"
         ],
@@ -82,27 +82,17 @@ if AUTOCORRECT_AVAILABLE:
 if SPELLCHECKER_AVAILABLE:
     spell_checker = SpellChecker()
 
-# Voice catalog
+# Voice catalog - Limited to most reliable voices
 VOICE_CATALOG = {
     "english": [
         {"id": "en-US-JennyNeural", "name": "Jenny (Female)", "language": "English", "gender": "Female"},
-        {"id": "en-US-GuyNeural", "name": "Guy (Male)", "language": "English", "gender": "Male"},
-        {"id": "en-US-AriaNeural", "name": "Aria (Female)", "language": "English", "gender": "Female"}
+        {"id": "en-US-GuyNeural", "name": "Guy (Male)", "language": "English", "gender": "Male"}
     ],
     "spanish": [
         {"id": "es-ES-ElviraNeural", "name": "Elvira (Female)", "language": "Spanish", "gender": "Female"}
     ],
     "hindi": [
         {"id": "hi-IN-SwaraNeural", "name": "Swara (Female)", "language": "Hindi", "gender": "Female"}
-    ],
-    "french": [
-        {"id": "fr-FR-DeniseNeural", "name": "Denise (Female)", "language": "French", "gender": "Female"}
-    ],
-    "german": [
-        {"id": "de-DE-KatjaNeural", "name": "Katja (Female)", "language": "German", "gender": "Female"}
-    ],
-    "japanese": [
-        {"id": "ja-JP-NanamiNeural", "name": "Nanami (Female)", "language": "Japanese", "gender": "Female"}
     ]
 }
 
@@ -169,7 +159,7 @@ def spell_check_text(text: str) -> Dict:
             
             # Get suggestions for misspelled words
             for word in blob.words:
-                if word.spellcheck()[0][1] < 0.8:  # Confidence threshold
+                if word.spellcheck()[0][1] < 0.8:
                     suggestions.append({
                         'word': str(word),
                         'suggestions': [w[0] for w in word.spellcheck()[:3]]
@@ -200,32 +190,6 @@ def spell_check_text(text: str) -> Dict:
                         corrected_words.append(word)
                 corrected = ' '.join(corrected_words)
         
-        # Basic autocorrect using regex patterns
-        else:
-            # Common spelling corrections
-            common_corrections = {
-                r'\bteh\b': 'the',
-                r'\badn\b': 'and',
-                r'\bwhta\b': 'what',
-                r'\bwhith\b': 'with',
-                r'\brealy\b': 'really',
-                r'\blike\b': 'like',
-                r'\bthier\b': 'their',
-                r'\byuo\b': 'you',
-                r'\bcoudl\b': 'could',
-                r'\bshoudl\b': 'should',
-                r'\bwoudl\b': 'would',
-            }
-            
-            for pattern, replacement in common_corrections.items():
-                if re.search(pattern, text, re.IGNORECASE):
-                    text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-                    suggestions.append({
-                        'pattern': pattern,
-                        'replacement': replacement
-                    })
-            corrected = text
-        
         return {
             'original': original,
             'corrected': corrected,
@@ -242,15 +206,49 @@ def spell_check_text(text: str) -> Dict:
             'total_suggestions': 0
         }
 
+async def safe_generate_voice(text: str, voice: str, rate: str, pitch: str, filename: str, max_retries: int = 3):
+    """Generate voice with retry logic and error handling."""
+    for attempt in range(max_retries):
+        try:
+            # Create communicate object with timeout
+            communicate = edge_tts.Communicate(
+                text=text,
+                voice=voice,
+                rate=rate,
+                pitch=pitch
+            )
+            
+            # Save with timeout
+            await asyncio.wait_for(communicate.save(filename), timeout=60)
+            return True
+            
+        except asyncio.TimeoutError:
+            print(f"Attempt {attempt + 1}: Timeout error")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)  # Wait before retry
+                continue
+            else:
+                raise Exception("Voice generation timeout after multiple attempts")
+                
+        except Exception as e:
+            print(f"Attempt {attempt + 1}: {str(e)}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+                continue
+            else:
+                raise e
+
 # ---------- API ENDPOINTS ----------
 @app.route('/')
 def home():
-    """Home route - redirect to frontend or show info."""
+    """Home route - show API info."""
     return jsonify({
         'message': 'TTS API Backend',
         'status': 'running',
         'frontend': 'https://ytvidtrans.netlify.app',
-        'api_docs': 'Use /api/* endpoints'
+        'api_docs': 'Use /api/* endpoints',
+        'health': '/api/health',
+        'voices': '/api/voices'
     })
 
 @app.route('/api/health', methods=['GET'])
@@ -258,8 +256,6 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'service': 'TTS API Backend',
-        'backend_url': 'https://ytvidtrans.onrender.com',
-        'frontend_url': 'https://ytvidtrans.netlify.app',
         'timestamp': datetime.now().isoformat(),
         'features': {
             'spell_check': TEXTBLOB_AVAILABLE or AUTOCORRECT_AVAILABLE or SPELLCHECKER_AVAILABLE,
@@ -383,7 +379,7 @@ def analyze_text():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/generate', methods=['POST'])
-@limiter.limit("30 per hour")
+@limiter.limit("10 per hour")  # Reduced for free tier
 def generate_voice():
     try:
         data = request.get_json()
@@ -395,12 +391,12 @@ def generate_voice():
         if not text:
             return jsonify({'error': 'Text is required'}), 400
         
-        if len(text) > 5000:
-            return jsonify({'error': 'Text too long (max 5000 characters)'}), 400
+        if len(text) > 1000:  # Reduced from 5000 for free tier
+            return jsonify({'error': 'Text too long (max 1000 characters on free tier)'}), 400
         
         voice = data.get('voice', 'en-US-JennyNeural')
-        rate_val = clamp(int(data.get('rate', 0)), -100, 100)
-        pitch_val = clamp(int(data.get('pitch', 0)), -100, 100)
+        rate_val = clamp(int(data.get('rate', 0)), -50, 50)  # Reduced range
+        pitch_val = clamp(int(data.get('pitch', 0)), -50, 50)  # Reduced range
         
         rate = f"{rate_val:+d}%"
         pitch = f"{pitch_val:+d}Hz"
@@ -415,25 +411,39 @@ def generate_voice():
             spell_result = spell_check_text(text)
             text = spell_result['corrected']
         
+        # Limit text for free tier
+        if len(text) > 800:
+            text = text[:800] + "... [text truncated for free tier]"
+        
         # Generate unique filename
         filename = f"temp_voice_{uuid.uuid4().hex}.mp3"
         
-        # Generate voice asynchronously
+        # Generate voice asynchronously with retry logic
         async def generate():
-            communicate = edge_tts.Communicate(
-                text=text,
-                voice=voice,
-                rate=rate,
-                pitch=pitch
-            )
-            await communicate.save(filename)
+            return await safe_generate_voice(text, voice, rate, pitch, filename)
         
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(generate())
+            success = loop.run_until_complete(generate())
+            if not success:
+                raise Exception("Voice generation failed")
+        except Exception as e:
+            # Try fallback voice if default fails
+            if voice != "en-US-JennyNeural":
+                print(f"Trying fallback voice for {voice}")
+                try:
+                    loop.run_until_complete(safe_generate_voice(text, "en-US-JennyNeural", rate, pitch, filename))
+                except:
+                    raise Exception(f"Voice generation failed for both {voice} and fallback")
+            else:
+                raise e
         finally:
             loop.close()
+        
+        # Check if file was created
+        if not os.path.exists(filename) or os.path.getsize(filename) < 100:
+            raise Exception("Generated audio file is too small or missing")
         
         # Send file and schedule deletion
         response = send_file(
@@ -456,25 +466,59 @@ def generate_voice():
         return response
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        error_msg = str(e)
+        print(f"Voice generation error: {error_msg}")
+        
+        # Provide user-friendly error messages
+        if "403" in error_msg or "Invalid response status" in error_msg:
+            return jsonify({
+                'error': 'TTS service temporarily unavailable. Please try again in a few minutes.',
+                'details': 'Edge TTS service is experiencing high load on free tier.'
+            }), 503
+        elif "timeout" in error_msg.lower():
+            return jsonify({
+                'error': 'Voice generation timeout. Please try with shorter text.',
+                'suggestion': 'Keep text under 500 characters for free tier.'
+            }), 504
+        else:
+            return jsonify({'error': f'Voice generation failed: {error_msg}'}), 500
 
 # CORS preflight requests
 @app.route('/api/<path:path>', methods=['OPTIONS'])
 def handle_options(path):
-    return '', 200
+    response = jsonify({'status': 'ok'})
+    response.headers.add('Access-Control-Allow-Origin', 'https://ytvidtrans.netlify.app')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response, 200
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    """Add CORS headers to all responses."""
+    response.headers.add('Access-Control-Allow-Origin', 'https://ytvidtrans.netlify.app')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
 
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': 'Endpoint not found'}), 404
+    response = jsonify({'error': 'Endpoint not found'})
+    response.status_code = 404
+    return response
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
-    return jsonify({'error': 'Rate limit exceeded. Please try again later.'}), 429
+    response = jsonify({'error': 'Rate limit exceeded. Please try again later.'})
+    response.status_code = 429
+    return response
 
 @app.errorhandler(500)
 def internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
+    response = jsonify({'error': 'Internal server error'})
+    response.status_code = 500
+    return response
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
