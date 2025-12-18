@@ -2,14 +2,14 @@
 # Exit on error
 set -o errexit
 
-# Upgrade pip to latest version
-pip install --upgrade pip
+# Upgrade pip and setuptools
+pip install --upgrade pip setuptools wheel
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Download NLTK data
-python -c "import nltk; nltk.download('punkt', quiet=True); print('NLTK data downloaded successfully')"
+python -c "import nltk; nltk.download('punkt', quiet=True); print('✓ NLTK data downloaded')"
 
-# Create temp directory for audio files
-mkdir -p temp_audio
+# Test Edge TTS installation
+python -c "import edge_tts; print('✓ Edge TTS version:', edge_tts.__version__)"
