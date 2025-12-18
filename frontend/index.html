@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -584,95 +586,139 @@
         }
     }
     
-    // Generate voice
-    async function generateVoice() {
-        const text = document.getElementById('textInput').value.trim();
-        const voice = document.getElementById('voiceSelect').value;
-        const rate = document.getElementById('rateSlider').value;
-        const pitch = document.getElementById('pitchSlider').value;
-        
-        if (!text) {
-            showMessage('Please enter text first', 'warning');
-            return;
-        }
-        
-        if (!voice) {
-            showMessage('Please select a voice', 'warning');
-            return;
-        }
-        
-        if (text.length > 5000) {
-            showMessage('Text is too long (max 5000 characters)', 'warning');
-            return;
-        }
-        
-        try {
-            // Disable button and show loading
-            const generateBtn = document.getElementById('generateBtn');
-            const originalText = generateBtn.innerHTML;
-            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
-            generateBtn.disabled = true;
-            
-            showLoading(true);
-            showMessage('Generating voice... Please wait', 'info');
-            
-            // Prepare request data
-            const requestData = {
-                text: text,
-                voice: voice,
-                rate: parseInt(rate),
-                pitch: parseInt(pitch),
-                preprocess: true,
-                processing_options: {
-                    clean_spaces: document.getElementById('cleanSpaces').checked,
-                    capitalize_sentences: document.getElementById('autoCapitalize').checked
-                },
-                spell_check: document.getElementById('spellCheck').checked
-            };
-            
-            // Send request to Render backend
-            const response = await fetch(`${BACKEND_URL}/api/generate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestData)
-            });
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Generation failed');
-            }
-            
-            // Get audio blob
-            const blob = await response.blob();
-            
-            if (blob.size === 0) {
-                throw new Error('Generated audio is empty');
-            }
-            
-            audioUrl = URL.createObjectURL(blob);
-            
-            // Show results
-            showResults(audioUrl);
-            
-            // Reset button and hide loading
-            generateBtn.innerHTML = originalText;
-            generateBtn.disabled = false;
-            showLoading(false);
-            showMessage('Voice generated successfully!', 'success');
-            
-        } catch (error) {
-            console.error('Voice generation error:', error);
-            
-            // Reset button and hide loading
-            const generateBtn = document.getElementById('generateBtn');
-            generateBtn.innerHTML = '<i class="fas fa-play-circle me-2"></i> Generate Voice';
-            generateBtn.disabled = false;
-            showLoading(false);
-            
-            showMessage('Error: ' + error.message, 'danger');
-        }
+// Generate voice
+async function generateVoice() {
+    const text = document.getElementById('textInput').value.trim();
+    const voice = document.getElementById('voiceSelect').value;
+    const rate = document.getElementById('rateSlider').value;
+    const pitch = document.getElementById('pitchSlider').value;
+    
+    if (!text) {
+        showMessage('Please enter text first', 'warning');
+        return;
     }
     
+    if (!voice) {
+        showMessage('Please select a voice', 'warning');
+        return;
+    }
+    
+    if (text.length > 1000) {
+        showMessage('Text is too long (max 1000 characters on free tier)', 'warning');
+        return;
+    }
+    
+    try {
+        // Disable button and show loading
+        const generateBtn = document.getElementById('generateBtn');
+        const originalText = generateBtn.innerHTML;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
+        generateBtn.disabled = true;
+        
+        showLoading(true);
+        showMessage('Generating voice... This may take 10-20 seconds on free tier', 'info');
+        
+        // Prepare request data
+        const requestData = {
+            text: text,
+            voice: voice,
+            rate: parseInt(rate),
+            pitch: parseInt(pitch),
+            preprocess: true,
+            processing_options: {
+                clean_spaces: document.getElementById('cleanSpaces').checked,
+                capitalize_sentences: document.getElementById('autoCapitalize').checked
+            },
+            spell_check: document.getElementById('spellCheck').checked
+        };
+        
+        console.log('Sending request to backend:', requestData);
+        
+        // Send request to Render backend with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+        
+        const response = await fetch(`${BACKEND_URL}/api/generate`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'audio/mpeg, application/json'
+            },
+            body: JSON.stringify(requestData),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            // Try to parse error message
+            let errorMessage = 'Generation failed';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorData.details || errorMessage;
+            } catch {
+                errorMessage = `Server error: ${response.status} ${response.statusText}`;
+            }
+            throw new Error(errorMessage);
+        }
+        
+        // Check if response is JSON (error) or audio
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Unknown error');
+        }
+        
+        // Get audio blob
+        const blob = await response.blob();
+        
+        if (blob.size === 0) {
+            throw new Error('Generated audio is empty');
+        }
+        
+        audioUrl = URL.createObjectURL(blob);
+        
+        // Show results
+        showResults(audioUrl);
+        
+        // Reset button and hide loading
+        generateBtn.innerHTML = originalText;
+        generateBtn.disabled = false;
+        showLoading(false);
+        showMessage('Voice generated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Voice generation error:', error);
+        
+        // Reset button and hide loading
+        const generateBtn = document.getElementById('generateBtn');
+        generateBtn.innerHTML = '<i class="fas fa-play-circle me-2"></i> Generate Voice';
+        generateBtn.disabled = false;
+        showLoading(false);
+        
+        // User-friendly error messages
+        let userMessage = error.message;
+        if (error.name === 'AbortError') {
+            userMessage = 'Request timeout. The server is taking too long to respond. Please try again with shorter text.';
+        } else if (error.message.includes('unavailable')) {
+            userMessage = 'TTS service is temporarily unavailable. Please try again in a few minutes.';
+        } else if (error.message.includes('free tier')) {
+            userMessage = 'Free tier limitation. Please use shorter text or try again later.';
+        }
+        
+        showMessage('Error: ' + userMessage, 'danger');
+        
+        // Show troubleshooting tips
+        setTimeout(() => {
+            showMessage(
+                'Tip: Try with shorter text (under 300 characters) and use "Jenny" voice for best results on free tier.',
+                'info'
+            );
+        }, 2000);
+    }
+}
     // Show results section with audio
     function showResults(audioUrl) {
         const resultsSection = document.getElementById('resultsSection');
