@@ -1,27 +1,28 @@
-# Base image with Python 3.9
-FROM python:3.9-slim
+# backend/Dockerfile
 
-# Install Java (default JRE) and other required tools
-RUN apt-get update && \
-    apt-get install -y default-jre wget git build-essential && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Base image
+FROM python:3.9-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first to leverage caching
-COPY backend/requirements.txt .
+# Install system dependencies (Java for language-tool-python)
+RUN apt-get update && \
+    apt-get install -y default-jre wget git build-essential && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy requirements.txt first for caching
+COPY requirements.txt .
+
+# Upgrade pip and install Python dependencies
 RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of your backend code
-COPY backend/ .
+# Copy all backend files into the container
+COPY . .
 
-# Expose the port that Render will use
+# Expose port (Flask default or your app port)
 EXPOSE 10000
 
-# Run Gunicorn to serve the app
+# Run the app with Gunicorn
 CMD ["gunicorn", "app:app", "-b", "0.0.0.0:10000"]
-
