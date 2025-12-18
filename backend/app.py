@@ -12,13 +12,12 @@ OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ------------------ TTS ENGINE ------------------
-async def generate_voice(text, voice, rate, pitch, style, filename):
+async def generate_voice(text, voice, rate, pitch, filename):
     communicate = edge_tts.Communicate(
         text=text,
         voice=voice,
         rate=rate,
-        pitch=pitch,
-        style=style
+        pitch=pitch
     )
     await communicate.save(filename)
 
@@ -30,7 +29,6 @@ def generate():
         voice = request.form.get("voice", "en-US-JennyNeural")
         rate = request.form.get("rate", "+0%")
         pitch = request.form.get("pitch", "+0Hz")
-        style = request.form.get("style", "default")
 
         if not text:
             return jsonify({"error": "Text is required"}), 400
@@ -40,7 +38,7 @@ def generate():
         )
 
         asyncio.run(
-            generate_voice(text, voice, rate, pitch, style, filename)
+            generate_voice(text, voice, rate, pitch, filename)
         )
 
         return send_file(filename, as_attachment=True)
