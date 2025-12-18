@@ -1,28 +1,26 @@
-# backend/Dockerfile
-
-# Base image
+# Use official Python slim image
 FROM python:3.9-slim
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y default-jre wget git maven unzip && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (Java for language-tool-python)
-RUN apt-get update && \
-    apt-get install -y default-jre wget git build-essential && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Copy backend code
+COPY backend/ .
 
-# Copy requirements.txt first for caching
-COPY requirements.txt .
-
-# Upgrade pip and install Python dependencies
+# Install Python dependencies
 RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Copy all backend files into the container
-COPY . .
+# Install LanguageTool server using install.sh
+RUN curl -L https://raw.githubusercontent.com/languagetool-org/languagetool/master/install.sh | bash -s -- -b
 
-# Expose port (Flask default or your app port)
+# Expose Flask app port
 EXPOSE 10000
 
-# Run the app with Gunicorn
-CMD ["gunicorn", "app:app", "-b", "0.0.0.0:10000"]
+# Start Flask app with Gunicorn
+CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:app"]
