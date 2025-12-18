@@ -1,42 +1,76 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Video Translate to Voice</title>
+<meta charset="UTF-8">
+<title>Text to Advanced Voice</title>
+<style>
+body { font-family: Arial; background:#0f172a; color:#fff; padding:30px }
+textarea, select, input { width:100%; margin:8px 0; padding:10px }
+button { padding:12px; background:#22c55e; border:none; cursor:pointer }
+</style>
 </head>
 <body>
-  <h2>YouTube Video → Translated Voice</h2>
 
-  <input type="text" id="vid" placeholder="YouTube Video ID"><br><br>
 
-  <select id="lang">
-    <option value="hi">Hindi</option>
-    <option value="en">English</option>
-    <option value="ta">Tamil</option>
-  </select><br><br>
+<h2>🗣️ Text → High Quality Voice Generator</h2>
 
-  Speed: <input type="range" id="speed" min="-50" max="50" value="0"><br>
-  Pitch: <input type="range" id="pitch" min="-10" max="10" value="0"><br><br>
 
-  <button onclick="generate()">Generate Voice</button>
+<textarea id="text" rows="6" placeholder="Paste or type your transcript here..."></textarea>
 
-  <script>
-    async function generate() {
-      const form = new FormData();
-      form.append('video_id', document.getElementById('vid').value);
-      form.append('language', document.getElementById('lang').value);
-      form.append('speed', document.getElementById('speed').value + '%');
-      form.append('pitch', document.getElementById('pitch').value + 'Hz');
 
-      const res = await fetch('https://ytvidtrans.onrender.com', {
-        method: 'POST',
-        body: form
-      });
+<label>Voice</label>
+<select id="voice">
+<option value="en-US-JennyNeural">English Female (Jenny)</option>
+<option value="en-US-GuyNeural">English Male (Guy)</option>
+<option value="hi-IN-SwaraNeural">Hindi Female</option>
+<option value="hi-IN-MadhurNeural">Hindi Male</option>
+<option value="ta-IN-PallaviNeural">Tamil Female</option>
+</select>
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url);
-    }
-  </script>
+
+<label>Speed</label>
+<input type="range" id="rate" min="-50" max="50" value="0">
+
+
+<label>Pitch</label>
+<input type="range" id="pitch" min="-20" max="20" value="0">
+
+
+<label>Style</label>
+<select id="style">
+<option value="default">Default</option>
+<option value="cheerful">Cheerful</option>
+<option value="sad">Sad</option>
+<option value="angry">Angry</option>
+<option value="excited">Excited</option>
+</select>
+
+
+<button onclick="generate()">Generate Voice</button>
+
+
+<script>
+async function generate() {
+const form = new FormData();
+form.append('text', document.getElementById('text').value);
+form.append('voice', document.getElementById('voice').value);
+form.append('rate', document.getElementById('rate').value + '%');
+form.append('pitch', document.getElementById('pitch').value + 'Hz');
+form.append('style', document.getElementById('style').value);
+
+
+const res = await fetch('https://ytvidtrans.onrender.com', {
+method: 'POST',
+body: form
+});
+
+
+const blob = await res.blob();
+const url = URL.createObjectURL(blob);
+window.open(url);
+}
+</script>
+
+
 </body>
 </html>
