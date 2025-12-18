@@ -59,7 +59,7 @@ form.append('pitch', document.getElementById('pitch').value + 'Hz');
 form.append('style', document.getElementById('style').value);
 
 
-const res = await fetch('https://ytvidtrans.onrender.com', {
+const res = await fetch('https://ytvidtrans.onrender.com/generate', {
 method: 'POST',
 body: form
 });
