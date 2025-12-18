@@ -5,46 +5,69 @@ import asyncio
 import uuid
 import os
 
+
 app = Flask(__name__)
 CORS(app)
+
 
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ------------------ TTS ENGINE ------------------
-async def generate_voice(text, voice, rate, pitch, filename):
-    communicate = edge_tts.Communicate(
-        text=text,
-        voice=voice,
-        rate=rate,
-        pitch=pitch
-    )
-    await communicate.save(filename)
 
-# ------------------ API ------------------
+# ---------- HELPERS ----------
+def clamp(value, min_v, max_v):
+return max(min_v, min(value, max_v))
+
+
+# ---------- TTS ----------
+async def generate_voice(text, voice, rate, pitch, filename):
+communicate = edge_tts.Communicate(
+text=text,
+voice=voice,
+rate=rate,
+pitch=pitch
+)
+await communicate.save(filename)
+
+
+# ---------- API ----------
 @app.route("/generate", methods=["POST"])
 def generate():
-    try:
-        text = request.form.get("text")
-        voice = request.form.get("voice", "en-US-JennyNeural")
-        rate = request.form.get("rate", "+0%")
-        pitch = request.form.get("pitch", "+0Hz")
+try:
+text = request.form.get("text")
+voice = request.form.get("voice", "en-US-JennyNeural")
 
-        if not text:
-            return jsonify({"error": "Text is required"}), 400
 
-        filename = os.path.join(
-            OUTPUT_DIR, f"voice_{uuid.uuid4().hex}.mp3"
-        )
+rate_val = int(request.form.get("rate", 0))
+pitch_val = int(request.form.get("pitch", 0))
 
-        asyncio.run(
-            generate_voice(text, voice, rate, pitch, filename)
-        )
 
-        return send_file(filename, as_attachment=True)
+rate_val = clamp(rate_val, -50, 50)
+pitch_val = clamp(pitch_val, -10, 10)
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+
+rate = f"{rate_val:+d}%"
+pitch = f"{pitch_val:+d}Hz"
+
+
+if not text:
+return jsonify({"error": "Text required"}), 400
+
+
+filename = os.path.join(
+OUTPUT_DIR, f"voice_{uuid.uuid4().hex}.mp3"
+)
+
+
+asyncio.run(generate_voice(text, voice, rate, pitch, filename))
+
+
+return send_file(filename, as_attachment=True)
+
+
+except Exception as e:
+return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+app.run(host="0.0.0.0", port=5000)
