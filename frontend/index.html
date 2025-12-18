@@ -3,333 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Studio - Advanced Text to Speech</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>AI Voice Studio</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        :root {
-            --primary-color: #4361ee;
-            --secondary-color: #3a0ca3;
-            --accent-color: #4cc9f0;
-            --light-color: #f8f9fa;
-            --dark-color: #212529;
-            --success-color: #4ade80;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        
-        .voice-control-slider {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 8px;
-            border-radius: 4px;
-            background: linear-gradient(to right, #4cc9f0, #4361ee);
-            outline: none;
-            margin: 10px 0;
-        }
-        
-        .voice-control-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #4361ee;
-            cursor: pointer;
-            border: 3px solid white;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-        }
-        
-        .preset-btn {
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-        }
-        
-        .preset-btn:hover {
-            transform: translateY(-2px);
-            border-color: var(--primary-color);
-        }
-        
-        .preset-btn.active {
-            background-color: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
-        
-        .text-stats-card {
-            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
-            border-left: 4px solid var(--primary-color);
-        }
-        
-        .voice-card {
-            transition: all 0.3s ease;
-            cursor: pointer;
-            border: 2px solid transparent;
-        }
-        
-        .voice-card:hover {
-            transform: translateY(-5px);
-            border-color: var(--accent-color);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-        }
-        
-        .voice-card.selected {
-            border-color: var(--primary-color);
-            background-color: rgba(67, 97, 238, 0.1);
-        }
-        
-        .tab-content {
-            animation: fadeIn 0.3s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .processing-step {
-            opacity: 0.5;
-            transition: all 0.3s ease;
-        }
-        
-        .processing-step.active {
-            opacity: 1;
-            color: var(--primary-color);
-            font-weight: bold;
-        }
-        
-        .processing-step.completed {
-            opacity: 1;
-            color: var(--success-color);
-        }
-        
-        .pulse-animation {
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(67, 97, 238, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0); }
-        }
-        
-        .audio-wave {
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 3px;
-        }
-        
-        .audio-bar {
-            width: 4px;
-            background: var(--primary-color);
-            border-radius: 2px;
-            animation: audioWave 1.5s ease-in-out infinite;
-        }
-        
-        .audio-bar:nth-child(2) { animation-delay: 0.1s; }
-        .audio-bar:nth-child(3) { animation-delay: 0.2s; }
-        .audio-bar:nth-child(4) { animation-delay: 0.3s; }
-        .audio-bar:nth-child(5) { animation-delay: 0.4s; }
-        
-        @keyframes audioWave {
-            0%, 100% { height: 10px; }
-            50% { height: 30px; }
-        }
-        
-        .feature-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 15px;
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
-        }
+        body { background: #f8f9fa; }
+        .card { border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-primary { background: #4361ee; border: none; }
+        .btn-primary:hover { background: #3a0ca3; }
+        textarea { min-height: 200px; }
+        #audioPlayer { width: 100%; margin-top: 20px; }
     </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="#">
-                <i class="fas fa-microphone-alt me-2"></i>
-                <strong>AI Voice Studio</strong>
-            </a>
-        </div>
-    </nav>
-
-    <!-- Main Container -->
-    <div class="container my-4">
+    <div class="container py-4">
         <div class="row">
-            <!-- Left Sidebar -->
-            <div class="col-lg-4 mb-4">
-                <div class="glass-card p-3 mb-3">
-                    <h5><i class="fas fa-sliders-h me-2"></i>Voice Controls</h5>
+            <div class="col-md-4">
+                <div class="card p-3 mb-3">
+                    <h4>Voice Settings</h4>
                     
-                    <!-- Voice Selection -->
                     <div class="mb-3">
                         <label class="form-label">Select Voice</label>
                         <select class="form-select" id="voiceSelect">
-                            <option value="">Loading voices...</option>
+                            <option value="en-US-JennyNeural">Jenny (English Female)</option>
+                            <option value="en-US-GuyNeural">Guy (English Male)</option>
+                            <option value="es-ES-ElviraNeural">Elvira (Spanish Female)</option>
+                            <option value="hi-IN-SwaraNeural">Swara (Hindi Female)</option>
                         </select>
                     </div>
                     
-                    <!-- Voice Parameters -->
                     <div class="mb-3">
                         <label class="form-label">Speed: <span id="rateValue">0%</span></label>
-                        <input type="range" class="voice-control-slider" id="rateSlider" min="-100" max="100" value="0">
-                        
-                        <label class="form-label mt-3">Pitch: <span id="pitchValue">0Hz</span></label>
-                        <input type="range" class="voice-control-slider" id="pitchSlider" min="-100" max="100" value="0">
+                        <input type="range" class="form-range" id="rateSlider" min="-50" max="50" value="0">
                     </div>
                     
-                    <!-- Presets -->
                     <div class="mb-3">
-                        <label class="form-label">Voice Presets</label>
-                        <div class="d-flex flex-wrap gap-2">
-                            <button class="btn btn-sm btn-outline-primary preset-btn" onclick="applyPreset('slow')">
-                                Slow
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary preset-btn active" onclick="applyPreset('normal')">
-                                Normal
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary preset-btn" onclick="applyPreset('fast')">
-                                Fast
-                            </button>
-                        </div>
+                        <label class="form-label">Pitch: <span id="pitchValue">0Hz</span></label>
+                        <input type="range" class="form-range" id="pitchSlider" min="-50" max="50" value="0">
                     </div>
-                </div>
-                
-                <!-- Text Tools -->
-                <div class="glass-card p-3 mb-3">
-                    <h5><i class="fas fa-tools me-2"></i>Text Tools</h5>
                     
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox" id="spellCheck" checked>
-                        <label class="form-check-label" for="spellCheck">
-                            Auto Spell Check
-                        </label>
-                    </div>
-                    
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="grammarCheck">
-                        <label class="form-check-label" for="grammarCheck">
-                            Basic Grammar Check
-                        </label>
-                    </div>
-                    
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" id="autoCapitalize" checked>
-                        <label class="form-check-label" for="autoCapitalize">
-                            Auto Capitalize
-                        </label>
+                        <label class="form-check-label">Auto Spell Check</label>
                     </div>
                     
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox" id="cleanSpaces" checked>
-                        <label class="form-check-label" for="cleanSpaces">
-                            Clean Spaces
-                        </label>
+                        <label class="form-check-label">Clean Spaces</label>
                     </div>
                 </div>
                 
-                <!-- Text Statistics -->
-                <div class="glass-card p-3">
-                    <h5><i class="fas fa-chart-bar me-2"></i>Text Stats</h5>
-                    <div class="text-center">
-                        <div class="row">
-                            <div class="col-4">
-                                <h4 id="wordCount">0</h4>
-                                <small>Words</small>
-                            </div>
-                            <div class="col-4">
-                                <h4 id="charCount">0</h4>
-                                <small>Chars</small>
-                            </div>
-                            <div class="col-4">
-                                <h4 id="sentenceCount">0</h4>
-                                <small>Sentences</small>
-                            </div>
+                <div class="card p-3">
+                    <h5>Text Stats</h5>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <h3 id="wordCount">0</h3>
+                            <small>Words</small>
                         </div>
-                        <div class="mt-3">
-                            <small id="readingTime" class="text-muted">Reading time: 0 min</small>
+                        <div class="col-4">
+                            <h3 id="charCount">0</h3>
+                            <small>Chars</small>
+                        </div>
+                        <div class="col-4">
+                            <h3 id="readingTime">0</h3>
+                            <small>Mins</small>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Main Content -->
-            <div class="col-lg-8">
-                <div class="glass-card p-4">
-                    <!-- Text Input -->
-                    <div class="mb-4">
-                        <label class="form-label"><i class="fas fa-edit me-2"></i>Enter Text</label>
-                        <textarea class="form-control" id="textInput" rows="10" 
-                                  placeholder="Enter your text here..."></textarea>
+            <div class="col-md-8">
+                <div class="card p-4">
+                    <h3 class="mb-3">Text to Speech Converter</h3>
+                    
+                    <div class="mb-3">
+                        <textarea class="form-control" id="textInput" placeholder="Enter your text here..."></textarea>
                     </div>
                     
-                    <!-- Quick Actions -->
-                    <div class="mb-4">
-                        <div class="d-flex flex-wrap gap-2 mb-3">
+                    <div class="mb-3">
+                        <div class="d-flex flex-wrap gap-2">
                             <button class="btn btn-outline-secondary" onclick="processText('lowercase')">
-                                <i class="fas fa-font"></i> Lowercase
+                                Lowercase
                             </button>
                             <button class="btn btn-outline-secondary" onclick="processText('uppercase')">
-                                <i class="fas fa-text-height"></i> Uppercase
+                                Uppercase
                             </button>
                             <button class="btn btn-outline-secondary" onclick="processText('titlecase')">
-                                <i class="fas fa-heading"></i> Title Case
-                            </button>
-                            <button class="btn btn-outline-secondary" onclick="processText('removeSpecial')">
-                                <i class="fas fa-ban"></i> Remove Special
-                            </button>
-                            <button class="btn btn-outline-secondary" onclick="analyzeText()">
-                                <i class="fas fa-chart-line"></i> Analyze
+                                Title Case
                             </button>
                             <button class="btn btn-outline-secondary" onclick="checkSpelling()">
-                                <i class="fas fa-spell-check"></i> Check Spelling
+                                Check Spelling
                             </button>
                         </div>
                     </div>
                     
-                    <!-- Generate Button -->
-                    <div class="text-center">
-                        <button class="btn btn-primary btn-lg px-5 py-3" onclick="generateVoice()" id="generateBtn">
-                            <i class="fas fa-play-circle me-2"></i> Generate Voice
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Results Section -->
-                <div class="glass-card p-4 mt-4" id="resultsSection" style="display: none;">
-                    <h5><i class="fas fa-music me-2"></i>Generated Audio</h5>
-                    <div class="mt-3">
-                        <audio controls class="w-100 mb-3" id="audioPlayer"></audio>
-                        <div class="d-flex justify-content-between">
-                            <button class="btn btn-outline-primary" onclick="downloadAudio()">
-                                <i class="fas fa-download me-2"></i> Download
-                            </button>
-                            <button class="btn btn-outline-danger" onclick="stopAudio()">
-                                <i class="fas fa-stop me-2"></i> Stop
-                            </button>
+                    <button class="btn btn-primary btn-lg w-100 py-3" onclick="generateVoice()" id="generateBtn">
+                        Generate Voice
+                    </button>
+                    
+                    <div id="resultsSection" style="display: none;">
+                        <audio controls id="audioPlayer"></audio>
+                        <div class="mt-3">
+                            <button class="btn btn-success" onclick="downloadAudio()">Download</button>
+                            <button class="btn btn-outline-secondary" onclick="stopAudio()">Stop</button>
                         </div>
                     </div>
                 </div>
@@ -337,31 +112,12 @@
         </div>
     </div>
 
-    <!-- Footer -->
-    <footer class="text-center text-white py-4 mt-5">
-        <div class="container">
-            <p class="mb-0">AI Voice Studio &copy; 2024</p>
-        </div>
-    </footer>
-
-    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // Global variables
-        let voices = [];
-        let currentAudio = null;
         let audioUrl = null;
         
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            loadVoices();
-            setupEventListeners();
-            updateTextStatistics();
-        });
-        
         // Setup event listeners
-        function setupEventListeners() {
+        document.addEventListener('DOMContentLoaded', function() {
             const textInput = document.getElementById('textInput');
             const rateSlider = document.getElementById('rateSlider');
             const pitchSlider = document.getElementById('pitchSlider');
@@ -375,73 +131,20 @@
             pitchSlider.addEventListener('input', function() {
                 document.getElementById('pitchValue').textContent = this.value + 'Hz';
             });
-        }
+            
+            updateTextStatistics();
+        });
         
-        // Load voices
-        async function loadVoices() {
-            try {
-                const response = await fetch('/api/voices');
-                const data = await response.json();
-                
-                if (data.voices) {
-                    voices = data.voices;
-                    populateVoiceSelect(data.voices);
-                }
-            } catch (error) {
-                console.error('Error loading voices:', error);
-                showAlert('Error', 'Failed to load voices', 'error');
-            }
-        }
-        
-        // Populate voice select
-        function populateVoiceSelect(voiceCatalog) {
-            const voiceSelect = document.getElementById('voiceSelect');
-            voiceSelect.innerHTML = '<option value="">Select a voice...</option>';
+        // Update text statistics
+        function updateTextStatistics() {
+            const text = document.getElementById('textInput').value;
+            const words = text.trim() ? text.trim().split(/\s+/) : [];
             
-            for (const [category, voiceList] of Object.entries(voiceCatalog)) {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = category.charAt(0).toUpperCase() + category.slice(1);
-                
-                for (const [id, voiceInfo] of Object.entries(voiceList)) {
-                    const option = document.createElement('option');
-                    option.value = id;
-                    option.textContent = `${voiceInfo.name} (${voiceInfo.language})`;
-                    optgroup.appendChild(option);
-                }
-                
-                voiceSelect.appendChild(optgroup);
-            }
+            document.getElementById('wordCount').textContent = words.length;
+            document.getElementById('charCount').textContent = text.length;
             
-            // Set default voice
-            voiceSelect.value = 'en-US-JennyNeural';
-        }
-        
-        // Apply preset
-        function applyPreset(preset) {
-            const rateSlider = document.getElementById('rateSlider');
-            const pitchSlider = document.getElementById('pitchSlider');
-            
-            // Reset buttons
-            document.querySelectorAll('.preset-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.currentTarget.classList.add('active');
-            
-            switch(preset) {
-                case 'slow':
-                    rateSlider.value = -50;
-                    break;
-                case 'normal':
-                    rateSlider.value = 0;
-                    pitchSlider.value = 0;
-                    break;
-                case 'fast':
-                    rateSlider.value = 50;
-                    break;
-            }
-            
-            rateSlider.dispatchEvent(new Event('input'));
-            pitchSlider.dispatchEvent(new Event('input'));
+            const readingTime = words.length / 200;
+            document.getElementById('readingTime').textContent = readingTime.toFixed(1);
         }
         
         // Process text
@@ -461,36 +164,18 @@
                         word.charAt(0).toUpperCase() + word.slice(1)
                     ).join(' ');
                     break;
-                case 'removeSpecial':
-                    text = text.replace(/[^\w\s.,!?]/g, '');
-                    break;
             }
             
             textInput.value = text;
             updateTextStatistics();
-            showAlert('Success', 'Text processed', 'success');
-        }
-        
-        // Update text statistics
-        function updateTextStatistics() {
-            const text = document.getElementById('textInput').value;
-            const words = text.trim() ? text.trim().split(/\s+/) : [];
-            const sentences = text.trim() ? text.split(/[.!?]+/).filter(s => s.trim()) : [];
-            
-            document.getElementById('wordCount').textContent = words.length;
-            document.getElementById('charCount').textContent = text.length;
-            document.getElementById('sentenceCount').textContent = sentences.length;
-            
-            const readingTimeMinutes = words.length / 200;
-            document.getElementById('readingTime').textContent = 
-                `Reading time: ${readingTimeMinutes.toFixed(1)} min`;
+            alert('Text processed!');
         }
         
         // Check spelling
         async function checkSpelling() {
             const text = document.getElementById('textInput').value.trim();
             if (!text) {
-                showAlert('Warning', 'Please enter text first', 'warning');
+                alert('Please enter text first');
                 return;
             }
             
@@ -503,67 +188,17 @@
                 
                 const result = await response.json();
                 
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-                
                 if (result.total_suggestions > 0) {
-                    let message = `Found ${result.total_suggestions} spelling suggestion(s)\n\n`;
-                    result.suggestions.forEach((suggestion, index) => {
-                        message += `${index + 1}. "${suggestion.word}" → ${suggestion.suggestions.join(', ')}\n`;
-                    });
-                    
-                    if (confirm(message + "\nApply corrections?")) {
+                    if (confirm(`Found ${result.total_suggestions} spelling suggestions. Apply corrections?`)) {
                         document.getElementById('textInput').value = result.corrected;
                         updateTextStatistics();
                     }
                 } else {
-                    showAlert('Success', 'No spelling errors found', 'success');
+                    alert('No spelling errors found!');
                 }
-                
             } catch (error) {
                 console.error('Spell check error:', error);
-                showAlert('Error', 'Failed to check spelling', 'error');
-            }
-        }
-        
-        // Analyze text
-        async function analyzeText() {
-            const text = document.getElementById('textInput').value.trim();
-            if (!text) {
-                showAlert('Warning', 'Please enter text first', 'warning');
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text })
-                });
-                
-                const result = await response.json();
-                
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-                
-                const metrics = result.metrics;
-                let message = `Text Analysis Results:\n\n`;
-                message += `Words: ${metrics.word_count}\n`;
-                message += `Characters: ${metrics.character_count}\n`;
-                message += `Sentences: ${metrics.sentence_count}\n`;
-                message += `Avg. Word Length: ${metrics.average_word_length}\n`;
-                message += `Avg. Sentence Length: ${metrics.average_sentence_length}\n`;
-                message += `Reading Time: ${metrics.reading_time_minutes} min\n`;
-                message += `Readability: ${result.readability_level}\n`;
-                message += `Score: ${metrics.readability_score}/100`;
-                
-                alert(message);
-                
-            } catch (error) {
-                console.error('Analysis error:', error);
-                showAlert('Error', 'Failed to analyze text', 'error');
+                alert('Failed to check spelling');
             }
         }
         
@@ -575,23 +210,16 @@
             const pitch = document.getElementById('pitchSlider').value;
             
             if (!text) {
-                showAlert('Warning', 'Please enter text first', 'warning');
-                return;
-            }
-            
-            if (!voice) {
-                showAlert('Warning', 'Please select a voice', 'warning');
+                alert('Please enter text first');
                 return;
             }
             
             try {
-                // Disable button and show loading
                 const generateBtn = document.getElementById('generateBtn');
                 const originalText = generateBtn.innerHTML;
-                generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating...';
+                generateBtn.innerHTML = 'Generating...';
                 generateBtn.disabled = true;
                 
-                // Prepare request data
                 const requestData = {
                     text: text,
                     voice: voice,
@@ -599,14 +227,11 @@
                     pitch: parseInt(pitch),
                     preprocess: true,
                     processing_options: {
-                        clean_spaces: document.getElementById('cleanSpaces').checked,
-                        capitalize_sentences: document.getElementById('autoCapitalize').checked
+                        clean_spaces: document.getElementById('cleanSpaces').checked
                     },
-                    spell_check: document.getElementById('spellCheck').checked,
-                    grammar_check: document.getElementById('grammarCheck').checked
+                    spell_check: document.getElementById('spellCheck').checked
                 };
                 
-                // Send request
                 const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -618,39 +243,27 @@
                     throw new Error(error.error || 'Generation failed');
                 }
                 
-                // Get audio blob
                 const blob = await response.blob();
                 audioUrl = URL.createObjectURL(blob);
                 
                 // Show results
-                showResults(audioUrl);
+                const resultsSection = document.getElementById('resultsSection');
+                const audioPlayer = document.getElementById('audioPlayer');
                 
-                // Reset button
+                audioPlayer.src = audioUrl;
+                resultsSection.style.display = 'block';
+                
                 generateBtn.innerHTML = originalText;
                 generateBtn.disabled = false;
                 
             } catch (error) {
                 console.error('Voice generation error:', error);
+                alert('Error: ' + error.message);
                 
-                // Reset button
                 const generateBtn = document.getElementById('generateBtn');
-                generateBtn.innerHTML = '<i class="fas fa-play-circle me-2"></i> Generate Voice';
+                generateBtn.innerHTML = 'Generate Voice';
                 generateBtn.disabled = false;
-                
-                showAlert('Error', error.message || 'Failed to generate voice', 'error');
             }
-        }
-        
-        // Show results
-        function showResults(audioUrl) {
-            const resultsSection = document.getElementById('resultsSection');
-            const audioPlayer = document.getElementById('audioPlayer');
-            
-            audioPlayer.src = audioUrl;
-            resultsSection.style.display = 'block';
-            
-            // Scroll to results
-            resultsSection.scrollIntoView({ behavior: 'smooth' });
         }
         
         // Download audio
@@ -663,32 +276,13 @@
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            
-            showAlert('Success', 'Download started', 'success');
         }
         
         // Stop audio
         function stopAudio() {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-            }
-            
             const audioPlayer = document.getElementById('audioPlayer');
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
-        }
-        
-        // Show alert
-        function showAlert(title, text, icon) {
-            Swal.fire({
-                title: title,
-                text: text,
-                icon: icon,
-                confirmButtonColor: '#4361ee',
-                timer: 3000,
-                timerProgressBar: true
-            });
         }
     </script>
 </body>
