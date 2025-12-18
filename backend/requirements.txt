@@ -12,3 +12,4 @@ textblob==0.17.1
 autocorrect==2.6.1
 pyspellchecker==0.7.2
 symspellpy==6.7.7
+tenacity==8.2.3  # For retry logic
