@@ -702,31 +702,86 @@
         // Check backend health
         async function checkBackendHealth() {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/health`);
-                const data = await response.json();
-                console.log('Backend status:', data.status);
-                showMessage(`✅ Backend connected: ${data.backend_url}`, 'success');
+                console.log('Checking backend health...');
+                const response = await fetch(`${BACKEND_URL}/api/health`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Backend status:', data.status);
+                    showMessage(`✅ Backend connected: ${data.backend_url}`, 'success');
+                    return data;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
             } catch (error) {
                 console.log('Backend not responding:', error);
                 showMessage('⚠️ Backend connection issue. Some features may not work.', 'warning');
+                return null;
             }
         }
         
         // Check TTS service info
         async function checkTTSInfo() {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/tts-info`);
+                console.log('Checking TTS info from:', `${BACKEND_URL}/api/tts-info`);
+                
+                const response = await fetch(`${BACKEND_URL}/api/tts-info`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'omit'
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('TTS info check failed:', response.status, errorText);
+                    
+                    if (response.status === 405) {
+                        console.log('Trying OPTIONS preflight...');
+                        const optionsResponse = await fetch(`${BACKEND_URL}/api/tts-info`, {
+                            method: 'OPTIONS',
+                            mode: 'cors'
+                        });
+                        console.log('OPTIONS response:', optionsResponse.status);
+                    }
+                    
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
+                console.log('TTS info response:', data);
                 
                 if (!data.available) {
                     showMessage('⚠️ MP3 download service is currently unavailable', 'warning');
                     document.getElementById('downloadBtn').disabled = true;
+                } else {
+                    showMessage('✅ TTS service available for MP3 download', 'success');
+                    document.getElementById('downloadBtn').disabled = false;
                 }
                 
                 return data;
             } catch (error) {
                 console.error('Failed to check TTS info:', error);
-                return null;
+                console.error('Error details:', error.message);
+                
+                // Don't disable download button on network errors
+                return {
+                    'engine': 'unknown',
+                    'available': false,
+                    'max_chars': 2000,
+                    'rate_range': {'min': 50, 'max': 300, 'default': 150},
+                    'volume_range': {'min': 0.1, 'max': 1.0, 'default': 1.0}
+                };
             }
         }
         
@@ -924,7 +979,11 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                 
                 const response = await fetch(`${BACKEND_URL}/api/spellcheck`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({ text: text })
                 });
                 
@@ -974,7 +1033,11 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                 
                 const response = await fetch(`${BACKEND_URL}/api/analyze`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({ text: text })
                 });
                 
@@ -1048,7 +1111,11 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                     
                     const response = await fetch(`${BACKEND_URL}/api/preprocess`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        mode: 'cors',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
                         body: JSON.stringify({
                             text: text,
                             options: {
@@ -1209,7 +1276,11 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                 
                 const response = await fetch(`${BACKEND_URL}/api/translate`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({
                         text: text,
                         target_lang: targetLang
@@ -1264,8 +1335,8 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                 showLoading(true);
                 showMessage('🎵 Generating MP3 audio file...', 'info');
                 
-                // Get TTS settings (convert for pyttsx3)
-                const rate = parseInt(document.getElementById('rateSlider').value * 100); // Convert to pyttsx3 range
+                // Get TTS settings
+                const rate = parseInt(document.getElementById('rateSlider').value * 100);
                 const volume = parseFloat(document.getElementById('volumeSlider').value);
                 
                 // Update progress
@@ -1284,15 +1355,19 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                     }
                 };
                 
+                console.log('Requesting MP3 generation:', requestData);
+                
                 // Update progress
                 progressBarInner.style.width = '50%';
                 
-                console.log('Requesting MP3 generation:', requestData);
-                
-                // Send request to backend
+                // Send request to backend with CORS mode
                 const response = await fetch(`${BACKEND_URL}/api/tts-mp3`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'audio/mpeg, application/json'
+                    },
                     body: JSON.stringify(requestData)
                 });
                 
@@ -1300,15 +1375,39 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                 progressBarInner.style.width = '80%';
                 
                 if (!response.ok) {
-                    // Try to parse error message
                     let errorMessage = 'MP3 generation failed';
+                    
+                    // Try to parse JSON error
                     try {
                         const errorData = await response.json();
                         errorMessage = errorData.error || errorMessage;
                     } catch {
-                        errorMessage = `Server error: ${response.status}`;
+                        // If not JSON, get text
+                        try {
+                            const errorText = await response.text();
+                            if (errorText) errorMessage = errorText;
+                        } catch {
+                            errorMessage = `Server error: ${response.status} ${response.statusText}`;
+                        }
                     }
+                    
+                    // Specific error handling
+                    if (response.status === 429) {
+                        errorMessage = 'Rate limit exceeded. Please wait before generating more MP3 files.';
+                    } else if (response.status === 503) {
+                        errorMessage = 'TTS service temporarily unavailable. Please try again later.';
+                    } else if (response.status === 400) {
+                        errorMessage = 'Invalid request. Please check your text and try again.';
+                    }
+                    
                     throw new Error(errorMessage);
+                }
+                
+                // Check content type
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('audio/mpeg')) {
+                    console.warn('Unexpected content type:', contentType);
+                    // Continue anyway - might still be audio
                 }
                 
                 // Get audio blob
@@ -1332,8 +1431,12 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                 a.download = filename;
                 document.body.appendChild(a);
                 a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                
+                // Cleanup
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
                 
                 // Show file info
                 const fileSize = (blob.size / 1024 / 1024).toFixed(2);
@@ -1375,16 +1478,23 @@ Try clicking the "Speak" button to hear this text, or "Download MP3" to get an a
                 
                 // User-friendly error messages
                 let userMessage = error.message;
-                if (error.message.includes('unavailable')) {
-                    userMessage = 'TTS service temporarily unavailable. Please try again in a few minutes.';
+                
+                if (error.message.includes('Failed to fetch')) {
+                    userMessage = 'Network error: Cannot connect to TTS server. Please check your internet connection.';
+                } else if (error.message.includes('CORS policy')) {
+                    userMessage = 'CORS error: Server configuration issue. Please contact administrator.';
                 } else if (error.message.includes('rate limit')) {
                     userMessage = 'Rate limit reached. Please wait before generating more MP3 files.';
+                } else if (error.message.includes('unavailable')) {
+                    userMessage = 'TTS service temporarily unavailable. Please try again in a few minutes.';
                 }
                 
                 showMessage('❌ ' + userMessage, 'danger');
                 
-                // Check TTS info
-                checkTTSInfo();
+                // Check TTS info for debugging
+                setTimeout(() => {
+                    checkTTSInfo();
+                }, 2000);
             }
         }
         
