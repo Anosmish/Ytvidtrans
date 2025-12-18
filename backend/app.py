@@ -6,7 +6,7 @@ import threading
 import time
 import re
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import edge_tts
 import googletrans
@@ -63,41 +63,24 @@ limiter = Limiter(
 translator = googletrans.Translator()
 
 # Initialize spell checkers
-if TEXTBLOB_AVAILABLE:
-    textblob_speller = TextBlob("")
 if AUTOCORRECT_AVAILABLE:
     autocorrect_speller = Speller()
 if SPELLCHECKER_AVAILABLE:
     spell_checker = SpellChecker()
 
-# Voice catalog
+# Voice catalog (simplified for faster loading)
 VOICE_CATALOG = {
-    "english": {
-        "en-US-JennyNeural": {"name": "Jenny (Female)", "language": "English", "gender": "Female"},
-        "en-US-GuyNeural": {"name": "Guy (Male)", "language": "English", "gender": "Male"},
-        "en-US-AriaNeural": {"name": "Aria (Female)", "language": "English", "gender": "Female"},
-        "en-US-DavisNeural": {"name": "Davis (Male)", "language": "English", "gender": "Male"}
-    },
-    "spanish": {
-        "es-ES-ElviraNeural": {"name": "Elvira (Female)", "language": "Spanish", "gender": "Female"},
-        "es-ES-AlvaroNeural": {"name": "Alvaro (Male)", "language": "Spanish", "gender": "Male"}
-    },
-    "hindi": {
-        "hi-IN-SwaraNeural": {"name": "Swara (Female)", "language": "Hindi", "gender": "Female"},
-        "hi-IN-MadhurNeural": {"name": "Madhur (Male)", "language": "Hindi", "gender": "Male"}
-    },
-    "japanese": {
-        "ja-JP-NanamiNeural": {"name": "Nanami (Female)", "language": "Japanese", "gender": "Female"},
-        "ja-JP-KeitaNeural": {"name": "Keita (Male)", "language": "Japanese", "gender": "Male"}
-    },
-    "french": {
-        "fr-FR-DeniseNeural": {"name": "Denise (Female)", "language": "French", "gender": "Female"},
-        "fr-FR-HenriNeural": {"name": "Henri (Male)", "language": "French", "gender": "Male"}
-    },
-    "german": {
-        "de-DE-KatjaNeural": {"name": "Katja (Female)", "language": "German", "gender": "Female"},
-        "de-DE-ConradNeural": {"name": "Conrad (Male)", "language": "German", "gender": "Male"}
-    }
+    "english": [
+        {"id": "en-US-JennyNeural", "name": "Jenny (Female)", "language": "English", "gender": "Female"},
+        {"id": "en-US-GuyNeural", "name": "Guy (Male)", "language": "English", "gender": "Male"},
+        {"id": "en-US-AriaNeural", "name": "Aria (Female)", "language": "English", "gender": "Female"}
+    ],
+    "spanish": [
+        {"id": "es-ES-ElviraNeural", "name": "Elvira (Female)", "language": "Spanish", "gender": "Female"}
+    ],
+    "hindi": [
+        {"id": "hi-IN-SwaraNeural", "name": "Swara (Female)", "language": "Hindi", "gender": "Female"}
+    ]
 }
 
 # ---------- HELPER FUNCTIONS ----------
@@ -147,33 +130,6 @@ def text_preprocessing(text: str, options: Dict) -> Dict:
         result['processed'] = re.sub(r'[^\w\s.,!?]', '', result['processed'])
         result['changes'].append('Removed special characters')
     
-    # Sort lines
-    sort_option = options.get('sort_option', 'none')
-    if sort_option != 'none':
-        lines = [line for line in result['processed'].split('\n') if line.strip()]
-        if sort_option == 'alphabetical':
-            lines.sort()
-            result['changes'].append('Sorted alphabetically')
-        elif sort_option == 'reverse':
-            lines = list(reversed(lines))
-            result['changes'].append('Reversed order')
-        elif sort_option == 'length':
-            lines.sort(key=len)
-            result['changes'].append('Sorted by length')
-        result['processed'] = '\n'.join(lines)
-    
-    # Remove duplicate lines
-    if options.get('remove_duplicates', False):
-        lines = result['processed'].split('\n')
-        unique_lines = []
-        seen = set()
-        for line in lines:
-            if line.strip() and line not in seen:
-                seen.add(line)
-                unique_lines.append(line)
-        result['processed'] = '\n'.join(unique_lines)
-        result['changes'].append('Removed duplicate lines')
-    
     return result
 
 def spell_check_text(text: str) -> Dict:
@@ -197,7 +153,7 @@ def spell_check_text(text: str) -> Dict:
                     })
         
         # Use autocorrect as fallback
-        elif AUTOCORRECT_AVAILABLE and len(text.split()) < 100:  # Limit for performance
+        elif AUTOCORRECT_AVAILABLE and len(text.split()) < 100:
             corrected = autocorrect_speller(text)
         
         # Use pyspellchecker as another option
@@ -263,98 +219,6 @@ def spell_check_text(text: str) -> Dict:
             'total_suggestions': 0
         }
 
-def grammar_check_basic(text: str) -> Dict:
-    """Basic grammar checking using regex patterns."""
-    original = text
-    corrected = text
-    issues = []
-    
-    # Common grammar patterns to check
-    grammar_patterns = [
-        # a vs an
-        (r'\ba [aeiouAEIOU][a-z]*\b', 'Should use "an" before vowel sounds', 
-         lambda m: f"an {m.group(0)[2:]}" if len(m.group(0)) > 2 else "an"),
-        
-        # your vs you're
-        (r'\byour (am|are|is|was|were|being|been)\b', 'Should be "you\'re"', 
-         lambda m: f"you're {m.group(1)}"),
-        
-        # its vs it's
-        (r'\bits (is|was|has)\b', 'Should be "it\'s"', 
-         lambda m: f"it's {m.group(1)}"),
-        
-        # their vs they're vs there
-        (r'\btheir (am|are|is|was|were)\b', 'Should be "they\'re"', 
-         lambda m: f"they're {m.group(1)}"),
-        
-        # Double words
-        (r'\b(\w+) \1\b', 'Repeated word', 
-         lambda m: m.group(1)),
-        
-        # Missing apostrophe in contractions
-        (r'\b(cant|dont|wont|isnt|arent|wasnt|werent|hasnt|havent|hadnt|doesnt|didnt)\b',
-         'Missing apostrophe in contraction',
-         lambda m: {
-             'cant': "can't", 'dont': "don't", 'wont': "won't",
-             'isnt': "isn't", 'arent': "aren't", 'wasnt': "wasn't",
-             'werent': "weren't", 'hasnt': "hasn't", 'havent': "haven't",
-             'hadnt': "hadn't", 'doesnt': "doesn't", 'didnt': "didn't"
-         }.get(m.group(1).lower(), m.group(1))),
-        
-        # Capitalize first word of sentence
-        (r'(?:^|\.\s+)([a-z])', 'Sentence should start with capital letter',
-         lambda m: m.group(0).upper()),
-    ]
-    
-    for pattern, message, correction_func in grammar_patterns:
-        matches = list(re.finditer(pattern, corrected, re.IGNORECASE))
-        for match in matches:
-            issues.append({
-                'position': match.start(),
-                'message': message,
-                'matched_text': match.group(0),
-                'suggestion': correction_func(match)
-            })
-    
-    # Apply corrections
-    if issues:
-        # Sort issues by position in reverse to avoid position shifts
-        issues.sort(key=lambda x: x['position'], reverse=True)
-        
-        text_list = list(corrected)
-        for issue in issues:
-            if 'suggestion' in issue and isinstance(issue['suggestion'], str):
-                start = issue['position']
-                end = start + len(issue['matched_text'])
-                text_list[start:end] = issue['suggestion']
-        
-        corrected = ''.join(text_list)
-    
-    return {
-        'original': original,
-        'corrected': corrected,
-        'issues': issues,
-        'total_issues': len(issues)
-    }
-
-def translate_text(text: str, target_lang: str) -> Dict:
-    """Translate text to target language."""
-    try:
-        translation = translator.translate(text, dest=target_lang)
-        return {
-            'original': text,
-            'translated': translation.text,
-            'source_language': translation.src,
-            'target_language': translation.dest,
-            'pronunciation': getattr(translation, 'pronunciation', '')
-        }
-    except Exception as e:
-        return {
-            'original': text,
-            'translated': text,
-            'error': str(e)
-        }
-
 # ---------- API ENDPOINTS ----------
 @app.route('/')
 def index():
@@ -412,37 +276,6 @@ def spellcheck_endpoint():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/grammar', methods=['POST'])
-@limiter.limit("100 per hour")
-def grammar_check():
-    try:
-        data = request.get_json()
-        text = data.get('text', '')
-        
-        if not text or not text.strip():
-            return jsonify({'error': 'Text is required'}), 400
-        
-        # First spell check
-        spell_result = spell_check_text(text)
-        
-        # Then basic grammar check
-        grammar_result = grammar_check_basic(spell_result['corrected'])
-        
-        # Combine results
-        result = {
-            'original': text,
-            'corrected': grammar_result['corrected'],
-            'spell_suggestions': spell_result.get('suggestions', []),
-            'grammar_issues': grammar_result.get('issues', []),
-            'total_spelling_suggestions': spell_result.get('total_suggestions', 0),
-            'total_grammar_issues': grammar_result.get('total_issues', 0),
-            'total_issues': spell_result.get('total_suggestions', 0) + grammar_result.get('total_issues', 0)
-        }
-        
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/translate', methods=['POST'])
 @limiter.limit("50 per hour")
 def translate_endpoint():
@@ -454,7 +287,14 @@ def translate_endpoint():
         if not text or not text.strip():
             return jsonify({'error': 'Text is required'}), 400
         
-        result = translate_text(text, target_lang)
+        translation = translator.translate(text, dest=target_lang)
+        result = {
+            'original': text,
+            'translated': translation.text,
+            'source_language': translation.src,
+            'target_language': translation.dest,
+            'pronunciation': getattr(translation, 'pronunciation', '')
+        }
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -479,11 +319,8 @@ def analyze_text():
         avg_word_length = sum(len(word) for word in words) / word_count if word_count > 0 else 0
         avg_sentence_length = word_count / sentence_count if sentence_count > 0 else 0
         
-        # Reading level (Flesch Reading Ease approximation)
-        readability_score = 0
-        if word_count > 0 and sentence_count > 0:
-            # Simplified Flesch Reading Ease
-            readability_score = max(0, min(100, 206.835 - 1.015 * (word_count / sentence_count) - 84.6 * (avg_word_length / 4)))
+        # Reading time
+        reading_time = word_count / 200
         
         return jsonify({
             'metrics': {
@@ -492,31 +329,12 @@ def analyze_text():
                 'character_count': char_count,
                 'average_word_length': round(avg_word_length, 2),
                 'average_sentence_length': round(avg_sentence_length, 2),
-                'reading_time_minutes': round(word_count / 200, 1),
-                'readability_score': round(readability_score, 1)
-            },
-            'readability_level': get_readability_level(readability_score)
+                'reading_time_minutes': round(reading_time, 1)
+            }
         })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-def get_readability_level(score):
-    """Get readability level based on Flesch score."""
-    if score >= 90:
-        return "Very Easy (5th grade)"
-    elif score >= 80:
-        return "Easy (6th grade)"
-    elif score >= 70:
-        return "Fairly Easy (7th grade)"
-    elif score >= 60:
-        return "Standard (8th-9th grade)"
-    elif score >= 50:
-        return "Fairly Difficult (10th-12th grade)"
-    elif score >= 30:
-        return "Difficult (College level)"
-    else:
-        return "Very Difficult (College graduate)"
 
 @app.route('/api/generate', methods=['POST'])
 @limiter.limit("30 per hour")
@@ -547,17 +365,6 @@ def generate_voice():
         if data.get('spell_check', False):
             spell_result = spell_check_text(text)
             text = spell_result['corrected']
-        
-        # Apply grammar check if requested
-        if data.get('grammar_check', False):
-            grammar_result = grammar_check_basic(text)
-            text = grammar_result['corrected']
-        
-        # Apply translation if requested
-        if data.get('translate', False):
-            target_lang = data.get('target_language', 'en')
-            translation_result = translate_text(text, target_lang)
-            text = translation_result['translated']
         
         # Generate unique filename
         filename = f"temp_voice_{uuid.uuid4().hex}.mp3"
@@ -595,34 +402,10 @@ def generate_voice():
             except:
                 pass
         
-        threading.Timer(30, cleanup).start()  # Keep file for 30 seconds
+        threading.Timer(30, cleanup).start()
         
         return response
         
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/batch', methods=['POST'])
-@limiter.limit("10 per hour")
-def batch_process():
-    try:
-        data = request.get_json()
-        texts = data.get('texts', [])
-        options = data.get('options', {})
-        
-        if not texts or len(texts) > 5:
-            return jsonify({'error': 'Please provide 1-5 texts'}), 400
-        
-        results = []
-        for text in texts:
-            if text and text.strip():
-                result = text_preprocessing(text, options)
-                results.append(result)
-        
-        return jsonify({
-            'total_processed': len(results),
-            'results': results
-        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
