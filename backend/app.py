@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Dict, List
 from io import BytesIO
 
-import pyttsx3
+
 import googletrans
 import nltk
 from flask import Flask, request, send_file, jsonify
