@@ -1,10 +1,12 @@
 import os
+import sys
 import uuid
 import asyncio
 import logging
 import threading
 import time
 import re
+import json
 from datetime import datetime
 from typing import Dict, List
 
@@ -15,6 +17,9 @@ from flask import Flask, request, send_file, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
+# Add parent directory to path to access frontend
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Try to import Python-based grammar tools
 try:
@@ -48,8 +53,8 @@ except LookupError:
         pass
 
 # Initialize Flask app
-app = Flask(__name__, static_folder='.', static_url_path='')
-CORS(app)
+app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Rate limiting
 limiter = Limiter(
@@ -68,7 +73,7 @@ if AUTOCORRECT_AVAILABLE:
 if SPELLCHECKER_AVAILABLE:
     spell_checker = SpellChecker()
 
-# Voice catalog (simplified for faster loading)
+# Voice catalog
 VOICE_CATALOG = {
     "english": [
         {"id": "en-US-JennyNeural", "name": "Jenny (Female)", "language": "English", "gender": "Female"},
@@ -80,6 +85,15 @@ VOICE_CATALOG = {
     ],
     "hindi": [
         {"id": "hi-IN-SwaraNeural", "name": "Swara (Female)", "language": "Hindi", "gender": "Female"}
+    ],
+    "french": [
+        {"id": "fr-FR-DeniseNeural", "name": "Denise (Female)", "language": "French", "gender": "Female"}
+    ],
+    "german": [
+        {"id": "de-DE-KatjaNeural", "name": "Katja (Female)", "language": "German", "gender": "Female"}
+    ],
+    "japanese": [
+        {"id": "ja-JP-NanamiNeural", "name": "Nanami (Female)", "language": "Japanese", "gender": "Female"}
     ]
 }
 
@@ -221,8 +235,11 @@ def spell_check_text(text: str) -> Dict:
 
 # ---------- API ENDPOINTS ----------
 @app.route('/')
-def index():
-    return send_from_directory('.', 'index.html')
+def serve_frontend():
+    """Serve the frontend HTML file."""
+    # Go up one level from backend to root, then to frontend
+    frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend')
+    return send_from_directory(frontend_path, 'index.html')
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -408,6 +425,12 @@ def generate_voice():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# Serve static files from frontend directory
+@app.route('/<path:filename>')
+def serve_static(filename):
+    frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend')
+    return send_from_directory(frontend_path, filename)
 
 # Error handlers
 @app.errorhandler(404)
