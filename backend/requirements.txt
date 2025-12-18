@@ -1,4 +1,4 @@
-
+flask-cors
 flask
 youtube-transcript-api
 edge-tts
