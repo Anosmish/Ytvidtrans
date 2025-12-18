@@ -2,24 +2,19 @@ import os
 import sys
 import uuid
 import asyncio
-import logging
 import threading
 import time
 import re
-import json
 from datetime import datetime
 from typing import Dict, List
 
 import edge_tts
 import googletrans
 import nltk
-from flask import Flask, request, send_file, jsonify, send_from_directory
+from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-
-# Add parent directory to path to access frontend
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Try to import Python-based grammar tools
 try:
@@ -27,7 +22,7 @@ try:
     TEXTBLOB_AVAILABLE = True
 except ImportError:
     TEXTBLOB_AVAILABLE = False
-    print("TextBlob not available for grammar checking")
+    print("TextBlob not available")
 
 try:
     from autocorrect import Speller
@@ -54,7 +49,21 @@ except LookupError:
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+
+# Configure CORS for Netlify frontend
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "https://ytvidtrans.netlify.app",  # Your Netlify domain
+            "http://localhost:5500",           # Local development
+            "http://localhost:3000",           # React dev server
+            "http://127.0.0.1:5500",
+            "http://127.0.0.1:3000"
+        ],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Rate limiting
 limiter = Limiter(
@@ -235,17 +244,22 @@ def spell_check_text(text: str) -> Dict:
 
 # ---------- API ENDPOINTS ----------
 @app.route('/')
-def serve_frontend():
-    """Serve the frontend HTML file."""
-    # Go up one level from backend to root, then to frontend
-    frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend')
-    return send_from_directory(frontend_path, 'index.html')
+def home():
+    """Home route - redirect to frontend or show info."""
+    return jsonify({
+        'message': 'TTS API Backend',
+        'status': 'running',
+        'frontend': 'https://ytvidtrans.netlify.app',
+        'api_docs': 'Use /api/* endpoints'
+    })
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({
         'status': 'healthy',
-        'service': 'TTS API',
+        'service': 'TTS API Backend',
+        'backend_url': 'https://ytvidtrans.onrender.com',
+        'frontend_url': 'https://ytvidtrans.netlify.app',
         'timestamp': datetime.now().isoformat(),
         'features': {
             'spell_check': TEXTBLOB_AVAILABLE or AUTOCORRECT_AVAILABLE or SPELLCHECKER_AVAILABLE,
@@ -259,7 +273,8 @@ def health_check():
 def get_voices():
     return jsonify({
         'voices': VOICE_CATALOG,
-        'total_count': sum(len(v) for v in VOICE_CATALOG.values())
+        'total_count': sum(len(v) for v in VOICE_CATALOG.values()),
+        'status': 'success'
     })
 
 @app.route('/api/preprocess', methods=['POST'])
@@ -267,6 +282,9 @@ def get_voices():
 def preprocess_text():
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
         text = data.get('text', '')
         options = data.get('options', {})
         
@@ -283,6 +301,9 @@ def preprocess_text():
 def spellcheck_endpoint():
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
         text = data.get('text', '')
         
         if not text or not text.strip():
@@ -298,6 +319,9 @@ def spellcheck_endpoint():
 def translate_endpoint():
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
         text = data.get('text', '')
         target_lang = data.get('target_lang', 'en')
         
@@ -310,7 +334,8 @@ def translate_endpoint():
             'translated': translation.text,
             'source_language': translation.src,
             'target_language': translation.dest,
-            'pronunciation': getattr(translation, 'pronunciation', '')
+            'pronunciation': getattr(translation, 'pronunciation', ''),
+            'status': 'success'
         }
         return jsonify(result)
     except Exception as e:
@@ -321,6 +346,9 @@ def translate_endpoint():
 def analyze_text():
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
         text = data.get('text', '')
         
         if not text or not text.strip():
@@ -347,7 +375,8 @@ def analyze_text():
                 'average_word_length': round(avg_word_length, 2),
                 'average_sentence_length': round(avg_sentence_length, 2),
                 'reading_time_minutes': round(reading_time, 1)
-            }
+            },
+            'status': 'success'
         })
         
     except Exception as e:
@@ -358,6 +387,9 @@ def analyze_text():
 def generate_voice():
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
         text = data.get('text', '').strip()
         
         if not text:
@@ -426,11 +458,10 @@ def generate_voice():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Serve static files from frontend directory
-@app.route('/<path:filename>')
-def serve_static(filename):
-    frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend')
-    return send_from_directory(frontend_path, filename)
+# CORS preflight requests
+@app.route('/api/<path:path>', methods=['OPTIONS'])
+def handle_options(path):
+    return '', 200
 
 # Error handlers
 @app.errorhandler(404)
