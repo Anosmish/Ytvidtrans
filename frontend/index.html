@@ -1,0 +1,42 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Video Translate to Voice</title>
+</head>
+<body>
+  <h2>YouTube Video → Translated Voice</h2>
+
+  <input type="text" id="vid" placeholder="YouTube Video ID"><br><br>
+
+  <select id="lang">
+    <option value="hi">Hindi</option>
+    <option value="en">English</option>
+    <option value="ta">Tamil</option>
+  </select><br><br>
+
+  Speed: <input type="range" id="speed" min="-50" max="50" value="0"><br>
+  Pitch: <input type="range" id="pitch" min="-10" max="10" value="0"><br><br>
+
+  <button onclick="generate()">Generate Voice</button>
+
+  <script>
+    async function generate() {
+      const form = new FormData();
+      form.append('video_id', document.getElementById('vid').value);
+      form.append('language', document.getElementById('lang').value);
+      form.append('speed', document.getElementById('speed').value + '%');
+      form.append('pitch', document.getElementById('pitch').value + 'Hz');
+
+      const res = await fetch('http://192.168.29.135:5000', {
+        method: 'POST',
+        body: form
+      });
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url);
+    }
+  </script>
+</body>
+</html>
