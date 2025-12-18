@@ -9,4 +9,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 # Download NLTK data
-python -c "import nltk; nltk.download('punkt', quiet=True); print('NLTK data downloaded')"
+python -c "import nltk; nltk.download('punkt', quiet=True); print('NLTK data downloaded successfully')"
+
+# Create necessary directories
+mkdir -p temp_outputs
