@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Studio - Advanced Text to Speech</title>
+    <title>AI Voice Studio - Text to Speech & MP3 Download</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -38,6 +38,16 @@
         
         .btn-primary:hover {
             background: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            border: none;
+        }
+        
+        .btn-success:hover {
+            background: #22c55e;
             transform: translateY(-2px);
         }
         
@@ -133,20 +143,20 @@
             100% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0); }
         }
         
-        .voice-card {
-            transition: all 0.3s ease;
-            cursor: pointer;
-            border: 2px solid transparent;
+        .progress-bar-custom {
+            height: 5px;
+            background: linear-gradient(90deg, #4ade80, #3b82f6);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            margin-top: 10px;
         }
         
-        .voice-card:hover {
-            transform: translateY(-3px);
-            border-color: var(--accent-color);
-        }
-        
-        .voice-card.selected {
-            border-color: var(--primary-color);
-            background-color: rgba(67, 97, 238, 0.1);
+        .file-info {
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 0.9rem;
         }
         
         @media (max-width: 768px) {
@@ -157,6 +167,20 @@
                 padding: 8px 12px;
                 font-size: 0.9rem;
             }
+        }
+        
+        .download-progress {
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .download-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #3b82f6);
+            transition: width 0.3s ease;
         }
     </style>
 </head>
@@ -172,7 +196,7 @@
                             AI Voice Studio
                         </span>
                     </h1>
-                    <p class="text-muted mb-0">Advanced Text Processing with Client-Side Speech Synthesis</p>
+                    <p class="text-muted mb-0">Advanced Text-to-Speech with Instant Playback & MP3 Download</p>
                 </div>
             </div>
         </div>
@@ -240,6 +264,54 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Download MP3 -->
+                <div class="glass-card p-3 mb-3">
+                    <h5 class="mb-3">
+                        <i class="fas fa-download me-2" style="color: #4361ee;"></i>
+                        Download MP3
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <button class="btn btn-success w-100 mb-2" onclick="downloadMP3()" id="downloadBtn">
+                            <i class="fas fa-file-audio me-2"></i> Generate & Download MP3
+                        </button>
+                        
+                        <!-- Download Progress -->
+                        <div class="download-progress" id="downloadProgress" style="display: none;">
+                            <div class="download-progress-bar" id="downloadProgressBar" style="width: 0%"></div>
+                        </div>
+                        
+                        <!-- File Info -->
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <div class="d-flex justify-content-between">
+                                <small><i class="fas fa-file me-1"></i> <span id="fileName">speech.mp3</span></small>
+                                <small><i class="fas fa-weight me-1"></i> <span id="fileSize">0 MB</span></small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="autoProcessDownload" checked>
+                            <label class="form-check-label" for="autoProcessDownload">
+                                <i class="fas fa-magic me-1"></i> Auto-process text
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="spellCheckDownload" checked>
+                            <label class="form-check-label" for="spellCheckDownload">
+                                <i class="fas fa-spell-check me-1"></i> Auto spell check
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info p-2">
+                        <small>
+                            <i class="fas fa-info-circle me-1"></i>
+                            Downloads use server-side TTS. Limited to 2000 characters.
+                        </small>
                     </div>
                 </div>
                 
@@ -359,16 +431,21 @@
                     </h5>
                     
                     <textarea class="form-control" id="textInput" rows="12" 
-                              placeholder="Type or paste your text here... You can enter any amount of text. The system will process it using Web Speech API for TTS."></textarea>
+                              placeholder="Type or paste your text here... You can enter up to 2000 characters for MP3 download."></textarea>
                     
-                    <div class="mt-3 d-flex justify-content-between">
+                    <div class="mt-3 d-flex justify-content-between align-items-center">
                         <small class="text-muted">
                             <i class="fas fa-info-circle me-1"></i>
-                            Text is processed on our backend, TTS happens in your browser
+                            <span id="charCountDisplay">0/2000 characters</span>
                         </small>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="clearText()">
-                            <i class="fas fa-trash me-1"></i> Clear
-                        </button>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary me-2" onclick="clearText()">
+                                <i class="fas fa-trash me-1"></i> Clear
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" onclick="loadSampleText()">
+                                <i class="fas fa-file-alt me-1"></i> Sample
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -423,7 +500,14 @@
                                 <i class="fas fa-microphone fa-lg"></i>
                             </div>
                             <h6>Browser TTS</h6>
-                            <small class="text-muted">Uses Web Speech API</small>
+                            <small class="text-muted">Instant Playback</small>
+                        </div>
+                        <div class="col-6 col-md-3 mb-3">
+                            <div class="feature-icon mx-auto">
+                                <i class="fas fa-download fa-lg"></i>
+                            </div>
+                            <h6>MP3 Download</h6>
+                            <small class="text-muted">High Quality</small>
                         </div>
                         <div class="col-6 col-md-3 mb-3">
                             <div class="feature-icon mx-auto">
@@ -438,13 +522,6 @@
                             </div>
                             <h6>Spell Check</h6>
                             <small class="text-muted">AI-Powered</small>
-                        </div>
-                        <div class="col-6 col-md-3 mb-3">
-                            <div class="feature-icon mx-auto">
-                                <i class="fas fa-chart-bar fa-lg"></i>
-                            </div>
-                            <h6>Text Analysis</h6>
-                            <small class="text-muted">Detailed Stats</small>
                         </div>
                     </div>
                 </div>
@@ -461,10 +538,10 @@
                             <div class="text-center">
                                 <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-2" 
                                      style="width: 50px; height: 50px;">
-                                    <i class="fas fa-server"></i>
+                                    <i class="fas fa-keyboard"></i>
                                 </div>
-                                <h6>Backend Processing</h6>
-                                <small class="text-muted">Text processing, translation, and analysis handled on our servers</small>
+                                <h6>1. Enter Text</h6>
+                                <small class="text-muted">Type or paste your text</small>
                             </div>
                         </div>
                         
@@ -472,10 +549,10 @@
                             <div class="text-center">
                                 <div class="rounded-circle bg-success text-white d-inline-flex align-items-center justify-content-center mb-2" 
                                      style="width: 50px; height: 50px;">
-                                    <i class="fas fa-browser"></i>
+                                    <i class="fas fa-volume-up"></i>
                                 </div>
-                                <h6>Client-Side TTS</h6>
-                                <small class="text-muted">Speech synthesis happens in your browser using Web Speech API</small>
+                                <h6>2. Listen</h6>
+                                <small class="text-muted">Click "Speak" for instant TTS</small>
                             </div>
                         </div>
                         
@@ -483,18 +560,19 @@
                             <div class="text-center">
                                 <div class="rounded-circle bg-info text-white d-inline-flex align-items-center justify-content-center mb-2" 
                                      style="width: 50px; height: 50px;">
-                                    <i class="fas fa-sync-alt"></i>
+                                    <i class="fas fa-file-download"></i>
                                 </div>
-                                <h6>Real-time Control</h6>
-                                <small class="text-muted">Pause, resume, and stop speech instantly</small>
+                                <h6>3. Download</h6>
+                                <small class="text-muted">Get MP3 for offline use</small>
                             </div>
                         </div>
                     </div>
                     
                     <div class="alert alert-info mt-3">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>Note:</strong> This application uses your browser's built-in Text-to-Speech engine. 
-                        Voice quality and availability depend on your browser and operating system.
+                        <strong>Dual TTS System:</strong> 
+                        <span class="text-primary">Web Speech API</span> for instant playback + 
+                        <span class="text-success">Server-side TTS</span> for MP3 downloads.
                     </div>
                 </div>
             </div>
@@ -505,7 +583,7 @@
             <div class="col-12">
                 <div class="glass-card p-3 text-center">
                     <p class="mb-0 text-muted">
-                        <i class="fas fa-code me-1"></i> Built with Flask & Web Speech API | 
+                        <i class="fas fa-code me-1"></i> Built with Flask & pyttsx3 | 
                         <i class="fas fa-globe me-1 ms-2"></i> AI Voice Studio © 2024 |
                         <i class="fas fa-server me-1 ms-2"></i> Backend: Render | 
                         <i class="fas fa-cloud me-1 ms-2"></i> Frontend: Netlify
@@ -538,6 +616,8 @@
             updateTextStatistics();
             checkBackendHealth();
             checkSpeechSupport();
+            checkTTSInfo();
+            loadSampleText();
         });
         
         // Initialize Web Speech API
@@ -632,6 +712,24 @@
             }
         }
         
+        // Check TTS service info
+        async function checkTTSInfo() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/tts-info`);
+                const data = await response.json();
+                
+                if (!data.available) {
+                    showMessage('⚠️ MP3 download service is currently unavailable', 'warning');
+                    document.getElementById('downloadBtn').disabled = true;
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('Failed to check TTS info:', error);
+                return null;
+            }
+        }
+        
         // Check speech support
         function checkSpeechSupport() {
             if (!('speechSynthesis' in window)) {
@@ -693,7 +791,6 @@
         function applyPreset(preset) {
             const rateSlider = document.getElementById('rateSlider');
             const pitchSlider = document.getElementById('pitchSlider');
-            const volumeSlider = document.getElementById('volumeSlider');
             
             // Reset all preset buttons
             document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -709,24 +806,20 @@
                 case 'slow':
                     rateSlider.value = 0.7;
                     pitchSlider.value = 0.8;
-                    volumeSlider.value = 1.0;
                     break;
                 case 'normal':
                     rateSlider.value = 1.0;
                     pitchSlider.value = 1.0;
-                    volumeSlider.value = 1.0;
                     break;
                 case 'fast':
                     rateSlider.value = 1.5;
                     pitchSlider.value = 1.2;
-                    volumeSlider.value = 1.0;
                     break;
             }
             
             // Update displays
             rateSlider.dispatchEvent(new Event('input'));
             pitchSlider.dispatchEvent(new Event('input'));
-            volumeSlider.dispatchEvent(new Event('input'));
             
             showMessage(`Preset applied: ${preset}`, 'success');
         }
@@ -770,6 +863,24 @@
             }
         }
         
+        // Load sample text
+        function loadSampleText() {
+            const sampleText = `Welcome to AI Voice Studio!
+
+This is a sample text to demonstrate the text-to-speech capabilities. You can:
+1. Listen to this text instantly using your browser's Web Speech API
+2. Download it as an MP3 file for offline use
+3. Translate it to other languages
+4. Check spelling and grammar
+5. Analyze text statistics
+
+Try clicking the "Speak" button to hear this text, or "Download MP3" to get an audio file!`;
+            
+            document.getElementById('textInput').value = sampleText;
+            updateTextStatistics();
+            showMessage('📝 Sample text loaded', 'info');
+        }
+        
         // Update text statistics
         function updateTextStatistics() {
             const text = document.getElementById('textInput').value;
@@ -779,6 +890,20 @@
             document.getElementById('wordCount').textContent = words.length;
             document.getElementById('charCount').textContent = text.length;
             document.getElementById('sentenceCount').textContent = sentences.length;
+            
+            // Update character count display
+            const charCountDisplay = document.getElementById('charCountDisplay');
+            charCountDisplay.textContent = `${text.length}/2000 characters`;
+            
+            // Color code based on length
+            if (text.length > 2000) {
+                charCountDisplay.style.color = '#ef4444';
+                charCountDisplay.innerHTML += ' <i class="fas fa-exclamation-triangle"></i>';
+            } else if (text.length > 1500) {
+                charCountDisplay.style.color = '#f59e0b';
+            } else {
+                charCountDisplay.style.color = '#6b7280';
+            }
             
             // Calculate reading time
             const readingTimeMinutes = words.length / 200;
@@ -1107,6 +1232,159 @@
                 console.error('Translation error:', error);
                 showLoading(false);
                 showMessage('❌ Failed to translate: ' + error.message, 'danger');
+            }
+        }
+        
+        // Download MP3 using backend TTS
+        async function downloadMP3() {
+            const text = document.getElementById('textInput').value.trim();
+            if (!text) {
+                showMessage('Please enter text first', 'warning');
+                return;
+            }
+            
+            if (text.length > 2000) {
+                showMessage('Text too long for MP3 download (max 2000 characters)', 'warning');
+                return;
+            }
+            
+            try {
+                // Disable button and show loading
+                const downloadBtn = document.getElementById('downloadBtn');
+                const originalText = downloadBtn.innerHTML;
+                downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating MP3...';
+                downloadBtn.disabled = true;
+                
+                // Show progress bar
+                const progressBar = document.getElementById('downloadProgress');
+                const progressBarInner = document.getElementById('downloadProgressBar');
+                progressBar.style.display = 'block';
+                progressBarInner.style.width = '10%';
+                
+                showLoading(true);
+                showMessage('🎵 Generating MP3 audio file...', 'info');
+                
+                // Get TTS settings (convert for pyttsx3)
+                const rate = parseInt(document.getElementById('rateSlider').value * 100); // Convert to pyttsx3 range
+                const volume = parseFloat(document.getElementById('volumeSlider').value);
+                
+                // Update progress
+                progressBarInner.style.width = '30%';
+                
+                // Prepare request data
+                const requestData = {
+                    text: text,
+                    rate: rate,
+                    volume: volume,
+                    preprocess: document.getElementById('autoProcessDownload').checked,
+                    spell_check: document.getElementById('spellCheckDownload').checked,
+                    processing_options: {
+                        clean_spaces: document.getElementById('cleanSpaces').checked,
+                        capitalize_sentences: document.getElementById('autoCapitalize').checked
+                    }
+                };
+                
+                // Update progress
+                progressBarInner.style.width = '50%';
+                
+                console.log('Requesting MP3 generation:', requestData);
+                
+                // Send request to backend
+                const response = await fetch(`${BACKEND_URL}/api/tts-mp3`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+                
+                // Update progress
+                progressBarInner.style.width = '80%';
+                
+                if (!response.ok) {
+                    // Try to parse error message
+                    let errorMessage = 'MP3 generation failed';
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorMessage;
+                    } catch {
+                        errorMessage = `Server error: ${response.status}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                // Get audio blob
+                const blob = await response.blob();
+                
+                if (blob.size === 0) {
+                    throw new Error('Generated MP3 is empty');
+                }
+                
+                // Update progress
+                progressBarInner.style.width = '100%';
+                
+                // Create filename
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const filename = `speech_${timestamp}.mp3`;
+                
+                // Create download link
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Show file info
+                const fileSize = (blob.size / 1024 / 1024).toFixed(2);
+                const fileInfo = document.getElementById('fileInfo');
+                document.getElementById('fileName').textContent = filename;
+                document.getElementById('fileSize').textContent = `${fileSize} MB`;
+                fileInfo.style.display = 'block';
+                
+                // Reset button and hide loading
+                setTimeout(() => {
+                    downloadBtn.innerHTML = originalText;
+                    downloadBtn.disabled = false;
+                    showLoading(false);
+                    progressBar.style.display = 'none';
+                    progressBarInner.style.width = '0%';
+                    
+                    showMessage('✅ MP3 downloaded successfully!', 'success');
+                    
+                    // Show duration estimate
+                    const duration = Math.round(text.length / 15);
+                    setTimeout(() => {
+                        showMessage(`📁 File: ${filename} | Size: ${fileSize} MB | Duration: ~${duration}s`, 'info');
+                    }, 1000);
+                }, 500);
+                
+            } catch (error) {
+                console.error('MP3 download error:', error);
+                
+                // Reset button and hide loading
+                const downloadBtn = document.getElementById('downloadBtn');
+                const progressBar = document.getElementById('downloadProgress');
+                const progressBarInner = document.getElementById('downloadProgressBar');
+                
+                downloadBtn.innerHTML = '<i class="fas fa-file-audio me-2"></i> Generate & Download MP3';
+                downloadBtn.disabled = false;
+                showLoading(false);
+                progressBar.style.display = 'none';
+                progressBarInner.style.width = '0%';
+                
+                // User-friendly error messages
+                let userMessage = error.message;
+                if (error.message.includes('unavailable')) {
+                    userMessage = 'TTS service temporarily unavailable. Please try again in a few minutes.';
+                } else if (error.message.includes('rate limit')) {
+                    userMessage = 'Rate limit reached. Please wait before generating more MP3 files.';
+                }
+                
+                showMessage('❌ ' + userMessage, 'danger');
+                
+                // Check TTS info
+                checkTTSInfo();
             }
         }
         
