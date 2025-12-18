@@ -3,7 +3,7 @@ requests
 
 Flask==2.3.3
 flask-cors==4.0.0
-flask-limiter==3.3.3
+flask-limiter==3.3.1
 edge-tts==6.1.9
 googletrans==4.0.0rc1
 language-tool-python==2.7.1
