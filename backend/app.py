@@ -1,12 +1,9 @@
-# backend/app.py
-
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 import edge_tts
 import asyncio
 import os
 import uuid
-from googletrans import Translator
 import time
 
 # ----------------- CONFIG -----------------
@@ -14,24 +11,18 @@ TEMP_FOLDER = "temp_audio"
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-CORS(app)  # Allow all origins; you can restrict to your frontend URL if desired
-
-translator = Translator()
+CORS(app)  # Allow all origins; restrict if needed
 
 # ----------------- HELPERS -----------------
-async def text_to_speech(text, voice="en-US-AriaNeural"):
-    """Convert text to speech using edge-tts"""
+async def text_to_speech(ssml, voice="en-US-AriaNeural"):
+    """Convert text to speech using edge-tts (SSML supported)"""
     filename = os.path.join(TEMP_FOLDER, f"{uuid.uuid4()}.mp3")
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(filename)  # correct usage
+    communicate = edge_tts.Communicate(ssml, voice)
+    await communicate.save(filename)
     return filename
 
-def translate_text(text, dest_lang):
-    """Translate text to the target language"""
-    return translator.translate(text, dest=dest_lang).text
-
 def cleanup_temp():
-    """Delete files older than 60 minutes"""
+    """Delete audio files older than 60 minutes"""
     now = time.time()
     for f in os.listdir(TEMP_FOLDER):
         path = os.path.join(TEMP_FOLDER, f)
@@ -41,21 +32,20 @@ def cleanup_temp():
 # ----------------- ROUTES -----------------
 @app.route("/wake", methods=["GET"])
 def wake():
-    """Simple endpoint to keep Render awake"""
     return jsonify({"status": "awake"}), 200
 
 @app.route("/generate", methods=["POST"])
 def generate_audio():
     data = request.json
     text = data.get("text")
-    voice = data.get("voice", "en-US-AriaNeural")  # full voice string
-    pitch = data.get("pitch", 0)                  # in percent
-    rate = data.get("rate", 0)                    # in percent
+    voice = data.get("voice", "en-US-AriaNeural")
+    pitch = data.get("pitch", 0)
+    rate = data.get("rate", 0)
 
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
-    # Apply pitch/rate via SSML
+    # SSML with prosody for pitch and rate
     ssml_text = f'<speak><prosody pitch="{pitch}%" rate="{rate}%">{text}</prosody></speak>'
 
     try:
@@ -64,25 +54,6 @@ def generate_audio():
         return jsonify({"error": f"TTS generation failed: {str(e)}"}), 500
 
     cleanup_temp()
-    return send_file(filename, as_attachment=True, download_name="speech.mp3")
-
-    # Translate if requested language != English
-    if language != "en":
-        try:
-            text = translate_text(text, language)
-        except Exception as e:
-            return jsonify({"error": f"Translation failed: {str(e)}"}), 400
-
-    # Generate TTS audio
-    try:
-        filename = asyncio.run(text_to_speech(text, voice=f"{language}-US-AriaNeural"))
-    except Exception as e:
-        return jsonify({"error": f"TTS generation failed: {str(e)}"}), 500
-
-    # Cleanup old files
-    cleanup_temp()
-
-    # Send audio file
     return send_file(filename, as_attachment=True, download_name="speech.mp3")
 
 # ----------------- MAIN -----------------
