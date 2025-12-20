@@ -1,99 +1,94 @@
-from flask import Flask, request, jsonify, send_file
+# backend/app.py
+
+from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
+from youtube_transcript_api import YouTubeTranscriptApi
 import edge_tts
 import asyncio
-import uuid
 import os
-import threading
-import time
-from deep_translator import GoogleTranslator  # Python translation library
+import uuid
+from googletrans import Translator  # For translation
+
+# ----------------- CONFIG -----------------
+TEMP_FOLDER = "temp_audio"
+os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Allow all origins; replace with origins=[your_frontend_url] for security
 
-AUDIO_FOLDER = "audio_files"
-os.makedirs(AUDIO_FOLDER, exist_ok=True)
+translator = Translator()
 
-VOICES = {
-    "English US": {"Female": "en-US-AriaNeural", "Male": "en-US-GuyNeural"},
-    "English UK": {"Female": "en-GB-LibbyNeural", "Male": "en-GB-RyanNeural"},
-    "French": {"Female": "fr-FR-DeniseNeural", "Male": "fr-FR-HenriNeural"},
-    "German": {"Female": "de-DE-KatjaNeural", "Male": "de-DE-ConradNeural"},
-    "Hindi": {"Female": "hi-IN-SwaraNeural", "Male": "hi-IN-RaviNeural"},
-}
+# ----------------- HELPERS -----------------
+def get_transcript(video_id):
+    """Fetch transcript from YouTube video ID."""
+    transcript = YouTubeTranscriptApi.get_transcript(video_id)
+    return " ".join([i['text'] for i in transcript])
 
-# ---------------- Auto-cleanup ----------------
-def cleanup_old_files():
-    while True:
-        now = time.time()
-        for f in os.listdir(AUDIO_FOLDER):
-            path = os.path.join(AUDIO_FOLDER, f)
-            if os.path.isfile(path) and now - os.path.getmtime(path) > 3600:  # 60 mins
-                os.remove(path)
-        time.sleep(600)
+async def text_to_speech(text, voice="en-US-AriaNeural"):
+    """Convert text to speech using edge-tts."""
+    filename = os.path.join(TEMP_FOLDER, f"{uuid.uuid4()}.mp3")
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(filename)
+    return filename
 
-threading.Thread(target=cleanup_old_files, daemon=True).start()
+def translate_text(text, dest_lang):
+    """Translate text to destination language."""
+    return translator.translate(text, dest=dest_lang).text
 
-# ---------------- Routes ----------------
+# ----------------- ROUTES -----------------
 @app.route("/wake", methods=["GET"])
-def wake_service():
-    return jsonify({"status": "Service is awake!"})
+def wake():
+    """Simple endpoint to keep Render awake."""
+    return jsonify({"status": "awake"}), 200
 
 @app.route("/generate", methods=["POST"])
-def generate_audio():
+def generate_tts():
+    """Generate TTS from text or YouTube transcript."""
     data = request.json
     text = data.get("text")
-    language = data.get("language")
-    gender = data.get("gender")
-    rate = data.get("rate", 0)
-    pitch = data.get("pitch", 0)
-    translate_to = data.get("translate_to")
+    video_id = data.get("video_id")
+    language = data.get("language", "en")  # Default voice: English
 
-    if not all([text, language, gender]):
-        return jsonify({"error": "Missing parameters"}), 400
-
-    # Translate if required
-    if translate_to and translate_to != "None":
+    # Get text from YouTube if video_id provided
+    if video_id:
         try:
-            text = GoogleTranslator(source='auto', target=translate_to).translate(text)
+            text = get_transcript(video_id)
         except Exception as e:
-            return jsonify({"error": f"Translation failed: {str(e)}"}), 500
+            return jsonify({"error": f"Failed to get transcript: {str(e)}"}), 400
 
-    voice = VOICES[language][gender]
-    filename = f"{uuid.uuid4()}.mp3"
-    filepath = os.path.join(AUDIO_FOLDER, filename)
+    if not text:
+        return jsonify({"error": "No text or video_id provided"}), 400
 
-    ssml = f"""
-    <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"
-           xmlns:mstts="http://www.w3.org/2001/mstts"
-           xml:lang="en-US">
-        <voice name="{voice}">
-            <prosody rate="{rate}%" pitch="{pitch}%">
-                {text}
-            </prosody>
-        </voice>
-    </speak>
-    """
+    # Translate if requested language != English
+    if language != "en":
+        try:
+            text = translate_text(text, language)
+        except Exception as e:
+            return jsonify({"error": f"Translation failed: {str(e)}"}), 400
 
-    async def text_to_speech():
-        communicate = edge_tts.Communicate(ssml, output=filepath)
-        await communicate.save()
+    # Generate TTS
+    try:
+        filename = asyncio.run(text_to_speech(text, voice=f"{language}-US-AriaNeural"))
+    except Exception as e:
+        return jsonify({"error": f"TTS generation failed: {str(e)}"}), 500
 
-    asyncio.run(text_to_speech())
+    # Return audio file
+    return send_file(filename, as_attachment=True, download_name="speech.mp3")
 
-    return jsonify({"audio_url": f"/download/{filename}"})
+# ----------------- CLEANUP -----------------
+# Optional: delete old files on startup or via cron job
+# Example: delete files older than 60 minutes
+import time
+def cleanup_temp():
+    now = time.time()
+    for f in os.listdir(TEMP_FOLDER):
+        path = os.path.join(TEMP_FOLDER, f)
+        if os.path.isfile(path) and now - os.path.getctime(path) > 3600:
+            os.remove(path)
 
+# Run cleanup periodically (you can call this in a separate thread or cron)
+cleanup_temp()
 
-@app.route("/download/<filename>")
-def download_file(filename):
-    path = os.path.join(AUDIO_FOLDER, filename)
-    if os.path.exists(path):
-        return send_file(path, as_attachment=True)
-    else:
-        return jsonify({"error": "File not found"}), 404
-
-
+# ----------------- MAIN -----------------
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
