@@ -11,11 +11,20 @@ TEMP_FOLDER = "temp_audio"
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-CORS(app)  # Allow all origins; restrict if needed
+CORS(app)
+
+# ----------------- VOICE MAPPING -----------------
+VOICE_MAP = {
+    "en": {"Female": "en-US-AriaNeural", "Male": "en-US-GuyNeural"},
+    "hi": {"Female": "hi-IN-SwaraNeural", "Male": "hi-IN-PrabhatNeural"},
+    "es": {"Female": "es-ES-ElviraNeural", "Male": "es-ES-AlvaroNeural"},
+    "fr": {"Female": "fr-FR-DeniseNeural", "Male": "fr-FR-HenriNeural"},
+    "de": {"Female": "de-DE-KatjaNeural", "Male": "de-DE-ConradNeural"}
+}
 
 # ----------------- HELPERS -----------------
 async def text_to_speech(ssml, voice="en-US-AriaNeural"):
-    """Convert text to speech using edge-tts (SSML supported)"""
+    """Convert text to speech using edge-tts"""
     filename = os.path.join(TEMP_FOLDER, f"{uuid.uuid4()}.mp3")
     communicate = edge_tts.Communicate(ssml, voice)
     await communicate.save(filename)
@@ -38,12 +47,16 @@ def wake():
 def generate_audio():
     data = request.json
     text = data.get("text")
-    voice = data.get("voice", "en-US-AriaNeural")
+    language = data.get("language", "en")
+    gender = data.get("gender", "Female")
     pitch = data.get("pitch", 0)
     rate = data.get("rate", 0)
 
     if not text:
         return jsonify({"error": "No text provided"}), 400
+
+    # Get correct voice
+    voice = VOICE_MAP.get(language, VOICE_MAP["en"]).get(gender, VOICE_MAP["en"]["Female"])
 
     # SSML with prosody for pitch and rate
     ssml_text = f'<speak><prosody pitch="{pitch}%" rate="{rate}%">{text}</prosody></speak>'
