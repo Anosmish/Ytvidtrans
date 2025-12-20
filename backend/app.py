@@ -16,14 +16,14 @@ CORS(app)
 # ----------------- VOICE MAPPING -----------------
 VOICE_MAP = {
     "en": {"Female": "en-US-AriaNeural", "Male": "en-US-GuyNeural"},
-    "hi": {"Female": "hi-IN-SwaraNeural", "Male": "hi-IN-PrabhatNeural"},
+    "hi": {"Female": "hi-IN-SwaraNeural", "Male": "hi-IN-SwaraNeural"},  # Male fallback to female
     "es": {"Female": "es-ES-ElviraNeural", "Male": "es-ES-AlvaroNeural"},
     "fr": {"Female": "fr-FR-DeniseNeural", "Male": "fr-FR-HenriNeural"},
     "de": {"Female": "de-DE-KatjaNeural", "Male": "de-DE-ConradNeural"}
 }
 
 # ----------------- HELPERS -----------------
-async def text_to_speech(ssml, voice="en-US-AriaNeural"):
+async def text_to_speech(ssml: str, voice: str):
     """Convert text to speech using edge-tts"""
     filename = os.path.join(TEMP_FOLDER, f"{uuid.uuid4()}.mp3")
     communicate = edge_tts.Communicate(ssml, voice)
@@ -46,7 +46,7 @@ def wake():
 @app.route("/generate", methods=["POST"])
 def generate_audio():
     data = request.json
-    text = data.get("text")
+    text = data.get("text", "").strip()
     language = data.get("language", "en")
     gender = data.get("gender", "Female")
     pitch = data.get("pitch", 0)
@@ -55,10 +55,10 @@ def generate_audio():
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
-    # Get correct voice
+    # Select the correct voice
     voice = VOICE_MAP.get(language, VOICE_MAP["en"]).get(gender, VOICE_MAP["en"]["Female"])
 
-    # SSML with prosody for pitch and rate
+    # Wrap only the user text in prosody
     ssml_text = f'<speak><prosody pitch="{pitch}%" rate="{rate}%">{text}</prosody></speak>'
 
     try:
