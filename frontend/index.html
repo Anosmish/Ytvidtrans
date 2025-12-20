@@ -5,151 +5,631 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Advanced TTS App</title>
   <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      max-width: 650px; 
-      margin: 50px auto; 
-      padding: 20px; 
-      background: #f5f5f5; 
+    :root {
+      --primary: #4361ee;
+      --primary-dark: #3a56d4;
+      --secondary: #7209b7;
+      --success: #4CAF50;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --gray: #6c757d;
+      --border-radius: 12px;
+      --box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+      --transition: all 0.3s ease;
     }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: var(--dark);
+    }
+    
+    .container {
+      max-width: 800px; 
+      margin: 0 auto;
+    }
+    
+    .app-header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: white;
+      border-radius: var(--border-radius);
+      box-shadow: var(--box-shadow);
+    }
+    
+    .app-header h1 {
+      color: var(--primary);
+      margin-bottom: 8px;
+      font-size: 2.4rem;
+    }
+    
+    .app-header p {
+      color: var(--gray);
+      font-size: 1.1rem;
+    }
+    
+    .controls-card { 
+      background: white;
+      padding: 30px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--box-shadow);
+      margin-bottom: 30px;
+    }
+    
+    .text-input-container {
+      margin-bottom: 25px;
+    }
+    
+    .text-input-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .char-counter {
+      font-size: 0.9rem;
+      color: var(--gray);
+    }
+    
     textarea { 
       width: 100%; 
-      height: 120px; 
-      padding: 10px; 
-      margin-bottom: 15px; 
+      height: 160px; 
+      padding: 15px; 
+      margin-bottom: 10px; 
       font-size: 16px; 
       box-sizing: border-box;
-      border: 2px solid #ccc;
-      border-radius: 4px;
+      border: 2px solid #e1e5eb;
+      border-radius: 10px;
+      resize: vertical;
+      font-family: inherit;
+      transition: var(--transition);
     }
-    select, input, button { 
-      padding: 10px; 
+    
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+    }
+    
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 25px;
+    }
+    
+    .control-group {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    label { 
+      margin-bottom: 8px; 
+      font-weight: 600;
+      color: var(--dark);
+      display: block;
+    }
+    
+    select, input { 
+      padding: 12px 15px; 
       font-size: 16px; 
-      margin: 5px 5px 15px 0; 
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      border: 2px solid #e1e5eb;
+      border-radius: 8px;
+      background-color: white;
+      transition: var(--transition);
+      font-family: inherit;
     }
-    button {
-      background-color: #4CAF50;
-      color: white;
+    
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+    }
+    
+    .range-value {
+      display: inline-block;
+      margin-left: 10px;
+      font-weight: bold;
+      color: var(--primary);
+      min-width: 40px;
+    }
+    
+    .button-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    
+    button { 
+      padding: 14px 28px; 
+      font-size: 16px; 
+      border-radius: 8px;
       border: none;
       cursor: pointer;
-      margin-top: 10px;
-      padding: 12px 24px;
-      font-weight: bold;
+      font-weight: 600;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
-    button:hover {
-      background-color: #45a049;
+    
+    .btn-primary {
+      background-color: var(--primary);
+      color: white;
     }
-    label {
-      display: inline-block;
-      margin-right: 10px;
-      font-weight: bold;
+    
+    .btn-primary:hover {
+      background-color: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(67, 97, 238, 0.3);
     }
-    #spinner { 
-      display: none; 
-      margin-top: 15px; 
-      color: #4CAF50;
-      font-weight: bold;
+    
+    .btn-secondary {
+      background-color: #f0f2f5;
+      color: var(--dark);
     }
-    #downloadLink { 
-      display: none; 
-      margin-top: 15px; 
+    
+    .btn-secondary:hover {
+      background-color: #e4e6e9;
+      transform: translateY(-2px);
+    }
+    
+    .btn-icon {
+      font-size: 18px;
+    }
+    
+    .results-card {
+      background: white;
+      padding: 30px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--box-shadow);
+      display: none;
+    }
+    
+    .results-card.active {
+      display: block;
+      animation: fadeIn 0.5s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #f0f2f5;
+    }
+    
+    .results-header h2 {
+      color: var(--primary);
+    }
+    
+    .audio-container {
+      margin-bottom: 20px;
+    }
+    
+    .audio-player {
+      width: 100%;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .audio-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .btn-audio {
       padding: 10px 20px;
-      background-color: #008CBA;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    
+    .btn-audio .btn-icon {
+      font-size: 16px;
+    }
+    
+    .spinner { 
+      display: none; 
+      margin: 30px auto;
+      text-align: center;
+    }
+    
+    .spinner.active {
+      display: block;
+    }
+    
+    .spinner-icon {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f0f2f5;
+      border-top: 5px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .spinner-text {
+      color: var(--primary);
+      font-weight: 600;
+    }
+    
+    .download-link { 
+      display: inline-block; 
+      padding: 12px 24px;
+      background-color: var(--success);
       color: white;
       text-decoration: none;
-      border-radius: 4px;
-      display: inline-block;
-    }
-    #downloadLink:hover {
-      background-color: #007B9E;
-    }
-    .audio-player {
-      margin-top: 15px;
-      width: 100%;
-    }
-    .controls {
-      background: white;
-      padding: 20px;
       border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      font-weight: 600;
+      transition: var(--transition);
+      margin-top: 10px;
+    }
+    
+    .download-link:hover {
+      background-color: #3d8b40;
+      transform: translateY(-2px);
+    }
+    
+    .notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 15px 25px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      box-shadow: var(--box-shadow);
+      z-index: 1000;
+      display: none;
+      animation: slideIn 0.3s ease;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    .notification.success {
+      background-color: var(--success);
+    }
+    
+    .notification.error {
+      background-color: #e63946;
+    }
+    
+    .history-section {
+      margin-top: 30px;
+      background: white;
+      padding: 25px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--box-shadow);
+      display: none;
+    }
+    
+    .history-section.active {
+      display: block;
+    }
+    
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    
+    .history-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .history-item {
+      padding: 12px 15px;
+      border-bottom: 1px solid #f0f2f5;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .history-item:last-child {
+      border-bottom: none;
+    }
+    
+    .history-text {
+      max-width: 70%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .history-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .history-btn {
+      padding: 5px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      background-color: #f0f2f5;
+      border: none;
+      cursor: pointer;
+    }
+    
+    .empty-history {
+      text-align: center;
+      padding: 20px;
+      color: var(--gray);
+    }
+    
+    @media (max-width: 768px) {
+      .controls-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .app-header h1 {
+        font-size: 1.8rem;
+      }
+      
+      .controls-card, .results-card {
+        padding: 20px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="controls">
-    <h1>Advanced Text-to-Speech App</h1>
-
-    <textarea id="textInput" placeholder="Enter text here..."></textarea>
-
-    <div>
-      <label for="languageSelect">Language:</label>
-      <select id="languageSelect">
-        <option value="en">English</option>
-        <option value="hi">Hindi</option>
-        <option value="es">Spanish</option>
-        <option value="fr">French</option>
-        <option value="de">German</option>
-      </select>
+  <div class="container">
+    <div class="app-header">
+      <h1>Advanced Text-to-Speech</h1>
+      <p>Convert text to natural sounding speech with customizable voice settings</p>
     </div>
-
-    <div>
-      <label for="voiceSelect">Voice Gender:</label>
-      <select id="voiceSelect">
-        <option value="Female">Female</option>
-        <option value="Male">Male</option>
-      </select>
-    </div>
-
-    <div>
-      <label for="pitchInput">Pitch (%):</label>
-      <input type="number" id="pitchInput" value="0" min="-50" max="50">
-    </div>
-
-    <div>
-      <label for="rateInput">Speed (%):</label>
-      <input type="number" id="rateInput" value="0" min="-50" max="50">
-    </div>
-
-    <button onclick="generateAudio()">Generate Audio</button>
-
-    <div id="spinner">🎵 Generating audio, please wait...</div>
     
-    <!-- Audio Player -->
-    <audio id="audioPlayer" controls class="audio-player" style="display: none;">
-      Your browser does not support the audio element.
-    </audio>
+    <div class="controls-card">
+      <div class="text-input-container">
+        <div class="text-input-label">
+          <label for="textInput">Enter Text to Convert</label>
+          <span class="char-counter"><span id="charCount">0</span>/5000 characters</span>
+        </div>
+        <textarea id="textInput" placeholder="Type or paste your text here..."></textarea>
+        <div class="button-container">
+          <button class="btn-secondary" onclick="insertSampleText()">
+            <span class="btn-icon">📝</span> Insert Sample
+          </button>
+          <button class="btn-secondary" onclick="clearText()">
+            <span class="btn-icon">🗑️</span> Clear Text
+          </button>
+        </div>
+      </div>
+      
+      <div class="controls-grid">
+        <div class="control-group">
+          <label for="languageSelect">Language</label>
+          <select id="languageSelect">
+            <option value="en">English</option>
+            <option value="hi">Hindi</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="voiceSelect">Voice Gender</label>
+          <select id="voiceSelect">
+            <option value="Female">Female</option>
+            <option value="Male">Male</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="pitchInput">
+            Pitch: <span id="pitchValue" class="range-value">0%</span>
+          </label>
+          <input type="range" id="pitchInput" min="-50" max="50" value="0">
+        </div>
+        
+        <div class="control-group">
+          <label for="rateInput">
+            Speed: <span id="rateValue" class="range-value">0%</span>
+          </label>
+          <input type="range" id="rateInput" min="-50" max="50" value="0">
+        </div>
+      </div>
+      
+      <div class="button-container">
+        <button class="btn-primary" onclick="generateAudio()">
+          <span class="btn-icon">🔊</span> Generate Audio
+        </button>
+        <button class="btn-secondary" onclick="toggleHistory()">
+          <span class="btn-icon">📚</span> History
+        </button>
+      </div>
+    </div>
     
-    <a id="downloadLink" href="" download="speech.mp3">Download Audio</a>
+    <div class="spinner" id="spinner">
+      <div class="spinner-icon"></div>
+      <div class="spinner-text">Generating audio, please wait...</div>
+    </div>
+    
+    <div class="results-card" id="resultsCard">
+      <div class="results-header">
+        <h2>Your Generated Audio</h2>
+        <button class="btn-secondary btn-audio" onclick="playPauseAudio()">
+          <span class="btn-icon" id="playPauseIcon">▶️</span> <span id="playPauseText">Play</span>
+        </button>
+      </div>
+      
+      <div class="audio-container">
+        <audio id="audioPlayer" class="audio-player" controls>
+          Your browser does not support the audio element.
+        </audio>
+      </div>
+      
+      <div class="audio-controls">
+        <button class="btn-secondary btn-audio" onclick="restartAudio()">
+          <span class="btn-icon">⏮️</span> Restart
+        </button>
+        <button class="btn-secondary btn-audio" onclick="skipBackward()">
+          <span class="btn-icon">⏪</span> -10s
+        </button>
+        <button class="btn-secondary btn-audio" onclick="skipForward()">
+          <span class="btn-icon">⏩</span> +10s
+        </button>
+        <button class="btn-secondary btn-audio" onclick="stopAudio()">
+          <span class="btn-icon">⏹️</span> Stop
+        </button>
+      </div>
+      
+      <a id="downloadLink" class="download-link" href="" download="speech.mp3">
+        <span class="btn-icon">⬇️</span> Download Audio (MP3)
+      </a>
+    </div>
+    
+    <div class="history-section" id="historySection">
+      <div class="history-header">
+        <h3>Audio Generation History</h3>
+        <button class="btn-secondary" onclick="clearHistory()">
+          <span class="btn-icon">🗑️</span> Clear History
+        </button>
+      </div>
+      <div class="history-list" id="historyList">
+        <!-- History items will be added here -->
+      </div>
+    </div>
   </div>
+  
+  <div class="notification" id="notification"></div>
 
   <script>
+    // State management
+    const appState = {
+      audioUrl: null,
+      isPlaying: false,
+      history: JSON.parse(localStorage.getItem('ttsHistory')) || [],
+      audioContext: null
+    };
+    
+    // DOM elements
+    const textInput = document.getElementById('textInput');
+    const charCount = document.getElementById('charCount');
+    const pitchInput = document.getElementById('pitchInput');
+    const pitchValue = document.getElementById('pitchValue');
+    const rateInput = document.getElementById('rateInput');
+    const rateValue = document.getElementById('rateValue');
+    const spinner = document.getElementById('spinner');
+    const resultsCard = document.getElementById('resultsCard');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const downloadLink = document.getElementById('downloadLink');
+    const playPauseIcon = document.getElementById('playPauseIcon');
+    const playPauseText = document.getElementById('playPauseText');
+    const historySection = document.getElementById('historySection');
+    const historyList = document.getElementById('historyList');
+    const notification = document.getElementById('notification');
+    
+    // Initialize
+    function init() {
+      updateCharCount();
+      updateRangeValues();
+      loadHistory();
+      
+      // Set up event listeners
+      textInput.addEventListener('input', updateCharCount);
+      pitchInput.addEventListener('input', updateRangeValues);
+      rateInput.addEventListener('input', updateRangeValues);
+      audioPlayer.addEventListener('play', handleAudioPlay);
+      audioPlayer.addEventListener('pause', handleAudioPause);
+      audioPlayer.addEventListener('ended', handleAudioEnded);
+      
+      // Add keyboard shortcuts
+      document.addEventListener('keydown', handleKeyboardShortcuts);
+    }
+    
+    // Character count update
+    function updateCharCount() {
+      const count = textInput.value.length;
+      charCount.textContent = count;
+      
+      // Change color if approaching limit
+      if (count > 4500) {
+        charCount.style.color = '#e63946';
+      } else if (count > 4000) {
+        charCount.style.color = '#f4a261';
+      } else {
+        charCount.style.color = 'inherit';
+      }
+    }
+    
+    // Update range value displays
+    function updateRangeValues() {
+      pitchValue.textContent = `${pitchInput.value}%`;
+      rateValue.textContent = `${rateInput.value}%`;
+    }
+    
+    // Show notification
+    function showNotification(message, type = 'success') {
+      notification.textContent = message;
+      notification.className = `notification ${type}`;
+      notification.style.display = 'block';
+      
+      setTimeout(() => {
+        notification.style.display = 'none';
+      }, 3000);
+    }
+    
+    // Generate audio
     async function generateAudio() {
-      const text = document.getElementById("textInput").value.trim();
+      const text = textInput.value.trim();
       const language = document.getElementById("languageSelect").value;
       const gender = document.getElementById("voiceSelect").value;
-      const pitch = parseInt(document.getElementById("pitchInput").value) || 0;
-      const rate = parseInt(document.getElementById("rateInput").value) || 0;
-      const spinner = document.getElementById("spinner");
-      const downloadLink = document.getElementById("downloadLink");
-      const audioPlayer = document.getElementById("audioPlayer");
-
-      // Reset UI
-      downloadLink.style.display = "none";
-      downloadLink.href = "";
-      audioPlayer.style.display = "none";
-      audioPlayer.src = "";
-      audioPlayer.pause();
-
+      const pitch = parseInt(pitchInput.value) || 0;
+      const rate = parseInt(rateInput.value) || 0;
+      
+      // Validate input
       if (!text) { 
-        alert("Please enter some text!"); 
+        showNotification("Please enter some text!", "error");
+        textInput.focus();
         return; 
       }
-
-      spinner.style.display = "block";
-
+      
+      if (text.length > 5000) {
+        showNotification("Text exceeds 5000 characters limit!", "error");
+        return;
+      }
+      
+      // Reset UI
+      resultsCard.classList.remove('active');
+      downloadLink.style.display = "none";
+      audioPlayer.src = "";
+      
+      // Show spinner
+      spinner.classList.add('active');
+      
       try {
         const response = await fetch("https://ytvidtrans.onrender.com/generate", {
           method: "POST",
@@ -164,9 +644,9 @@
             rate: rate 
           })
         });
-
-        spinner.style.display = "none";
-
+        
+        spinner.classList.remove('active');
+        
         if (!response.ok) {
           const errorText = await response.text();
           let errorMsg = "Unknown error";
@@ -176,54 +656,241 @@
           } catch {
             errorMsg = errorText || `HTTP ${response.status}`;
           }
-          alert("Error: " + errorMsg);
+          showNotification("Error: " + errorMsg, "error");
           return;
         }
-
+        
         // Get audio as blob
         const blob = await response.blob();
         
         if (blob.size === 0) {
-          alert("Error: Empty audio file received");
+          showNotification("Error: Empty audio file received", "error");
           return;
         }
-
+        
         const url = URL.createObjectURL(blob);
+        appState.audioUrl = url;
         
-        // Play audio
+        // Set up audio player
         audioPlayer.src = url;
-        audioPlayer.style.display = "block";
+        audioPlayer.load();
         
-        // Don't auto-play, let user click play
-        // audioPlayer.play().catch(e => {
-        //   console.log("Auto-play prevented:", e);
-        // });
-
-        // Set up download link
+        // Update UI
+        resultsCard.classList.add('active');
         downloadLink.href = url;
         downloadLink.style.display = "inline-block";
         
-        // Clean up URL when audio ends
-        audioPlayer.onended = function() {
+        // Add to history
+        addToHistory(text, language, gender, pitch, rate, url);
+        
+        // Show success message
+        showNotification("Audio generated successfully!", "success");
+        
+        // Auto-play if short text
+        if (text.length < 100) {
           setTimeout(() => {
-            URL.revokeObjectURL(url);
-          }, 1000);
-        };
-
+            audioPlayer.play().catch(e => {
+              console.log("Auto-play prevented:", e);
+            });
+          }, 500);
+        }
+        
       } catch (error) {
-        spinner.style.display = "none";
+        spinner.classList.remove('active');
         console.error("Fetch error:", error);
-        alert("Failed to generate audio. Make sure the backend server is running on http://localhost:5000");
+        showNotification("Failed to generate audio. Check your connection.", "error");
       }
     }
-
-    // Allow Enter key to submit (Ctrl+Enter)
-    document.getElementById("textInput").addEventListener("keydown", function(event) {
-      if (event.key === "Enter" && event.ctrlKey) {
-        event.preventDefault();
+    
+    // Audio control functions
+    function playPauseAudio() {
+      if (audioPlayer.paused) {
+        audioPlayer.play();
+      } else {
+        audioPlayer.pause();
+      }
+    }
+    
+    function restartAudio() {
+      audioPlayer.currentTime = 0;
+      if (appState.isPlaying) {
+        audioPlayer.play();
+      }
+    }
+    
+    function skipBackward() {
+      audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 10);
+    }
+    
+    function skipForward() {
+      audioPlayer.currentTime = Math.min(audioPlayer.duration, audioPlayer.currentTime + 10);
+    }
+    
+    function stopAudio() {
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+      handleAudioPause();
+    }
+    
+    function handleAudioPlay() {
+      appState.isPlaying = true;
+      playPauseIcon.textContent = '⏸️';
+      playPauseText.textContent = 'Pause';
+    }
+    
+    function handleAudioPause() {
+      appState.isPlaying = false;
+      playPauseIcon.textContent = '▶️';
+      playPauseText.textContent = 'Play';
+    }
+    
+    function handleAudioEnded() {
+      handleAudioPause();
+      showNotification("Audio playback finished", "success");
+    }
+    
+    // History functions
+    function addToHistory(text, language, gender, pitch, rate, url) {
+      const historyItem = {
+        id: Date.now(),
+        text: text.length > 50 ? text.substring(0, 50) + "..." : text,
+        fullText: text,
+        language,
+        gender,
+        pitch,
+        rate,
+        url,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      appState.history.unshift(historyItem);
+      
+      // Keep only last 10 items
+      if (appState.history.length > 10) {
+        appState.history = appState.history.slice(0, 10);
+      }
+      
+      saveHistory();
+      loadHistory();
+    }
+    
+    function loadHistory() {
+      historyList.innerHTML = '';
+      
+      if (appState.history.length === 0) {
+        historyList.innerHTML = '<div class="empty-history">No audio generation history yet</div>';
+        return;
+      }
+      
+      appState.history.forEach(item => {
+        const historyItem = document.createElement('div');
+        historyItem.className = 'history-item';
+        historyItem.innerHTML = `
+          <div class="history-text" title="${item.fullText}">${item.text}</div>
+          <div class="history-actions">
+            <button class="history-btn" onclick="playFromHistory('${item.id}')">▶️ Play</button>
+            <button class="history-btn" onclick="regenerateFromHistory('${item.id}')">🔄 Regenerate</button>
+            <button class="history-btn" onclick="removeFromHistory('${item.id}')">🗑️</button>
+          </div>
+        `;
+        historyList.appendChild(historyItem);
+      });
+    }
+    
+    function playFromHistory(id) {
+      const item = appState.history.find(i => i.id == id);
+      if (item && item.url) {
+        audioPlayer.src = item.url;
+        audioPlayer.play();
+        resultsCard.classList.add('active');
+        showNotification("Playing from history", "success");
+      }
+    }
+    
+    function regenerateFromHistory(id) {
+      const item = appState.history.find(i => i.id == id);
+      if (item) {
+        textInput.value = item.fullText;
+        document.getElementById("languageSelect").value = item.language;
+        document.getElementById("voiceSelect").value = item.gender;
+        pitchInput.value = item.pitch;
+        rateInput.value = item.rate;
+        updateRangeValues();
+        updateCharCount();
         generateAudio();
       }
-    });
+    }
+    
+    function removeFromHistory(id) {
+      appState.history = appState.history.filter(i => i.id != id);
+      saveHistory();
+      loadHistory();
+      showNotification("Item removed from history", "success");
+    }
+    
+    function clearHistory() {
+      if (appState.history.length > 0 && confirm("Are you sure you want to clear all history?")) {
+        appState.history = [];
+        saveHistory();
+        loadHistory();
+        showNotification("History cleared", "success");
+      }
+    }
+    
+    function toggleHistory() {
+      historySection.classList.toggle('active');
+    }
+    
+    function saveHistory() {
+      localStorage.setItem('ttsHistory', JSON.stringify(appState.history));
+    }
+    
+    // Utility functions
+    function insertSampleText() {
+      const samples = [
+        "Hello! This is a sample text for text-to-speech conversion. You can customize the voice, pitch, and speed to your liking.",
+        "Welcome to the advanced TTS application. With this tool, you can convert any text into natural sounding speech in multiple languages.",
+        "The weather today is sunny with a high of 75 degrees. It's a perfect day for a walk in the park or enjoying outdoor activities.",
+        "Text-to-speech technology has come a long way. Now we can generate realistic voices that sound almost human in various languages.",
+        "Did you know that the first speech synthesis system was created in the 18th century? Technology has evolved tremendously since then."
+      ];
+      
+      const randomSample = samples[Math.floor(Math.random() * samples.length)];
+      textInput.value = randomSample;
+      updateCharCount();
+      showNotification("Sample text inserted", "success");
+    }
+    
+    function clearText() {
+      textInput.value = '';
+      updateCharCount();
+      textInput.focus();
+    }
+    
+    // Keyboard shortcuts
+    function handleKeyboardShortcuts(e) {
+      // Ctrl+Enter to generate audio
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        generateAudio();
+      }
+      
+      // Space to play/pause when audio player is focused
+      if (e.key === ' ' && !['TEXTAREA', 'INPUT', 'BUTTON'].includes(e.target.tagName)) {
+        e.preventDefault();
+        if (audioPlayer.src) {
+          playPauseAudio();
+        }
+      }
+      
+      // Escape to stop audio
+      if (e.key === 'Escape' && appState.isPlaying) {
+        stopAudio();
+      }
+    }
+    
+    // Initialize the app
+    document.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
