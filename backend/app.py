@@ -35,24 +35,21 @@ def run_async(coro):
         loop.close()
 
 async def text_to_speech_async(text: str, voice: str, pitch: int, rate: int):
-    """Convert text to speech using edge-tts without extra SSML wrapping"""
+    """Convert text to speech using edge-tts with proper SSML formatting"""
     filename = os.path.join(TEMP_FOLDER, f"{uuid.uuid4()}.mp3")
     
-    # Clean the text - remove any special SSML tags that might be causing issues
+    # Clean the text
     clean_text = clean_user_text(text)
     
-    # Format pitch and rate with + or - sign as required by edge_tts
-    pitch_str = f"{pitch:+d}%"  # This gives "+10%" or "-10%" format
-    rate_str = f"{rate:+d}%"    # This gives "+10%" or "-10%" format
+    # Format pitch and rate for SSML
+    # SSML expects values like "+10%" or "-10%"
+    pitch_percent = pitch
+    rate_percent = 100 + rate  # SSML rate: 100% is normal, 150% is 1.5x faster
     
-    # Use communicate with pitch and rate parameters directly
-    communicate = edge_tts.Communicate(
-        clean_text, 
-        voice,
-        pitch=pitch_str,
-        rate=rate_str
-    )
+    # Create simple SSML without extra voices
+    ssml_text = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><prosody pitch="{pitch_percent}%" rate="{rate_percent}%">{clean_text}</prosody></speak>'
     
+    communicate = edge_tts.Communicate(ssml_text, voice)
     await communicate.save(filename)
     return filename
 
@@ -61,19 +58,19 @@ def text_to_speech(text: str, voice: str, pitch: int, rate: int):
     return run_async(text_to_speech_async(text, voice, pitch, rate))
 
 def clean_user_text(text: str) -> str:
-    """Clean user input to prevent SSML injection and remove unwanted characters"""
+    """Clean user input"""
     if not text:
         return ""
     
     # Remove any existing SSML tags
     text = re.sub(r'<[^>]+>', '', text)
     
-    # Replace problematic characters
-    text = text.replace('&', 'and')
-    text = text.replace('<', '')
-    text = text.replace('>', '')
-    text = text.replace('"', '')
-    text = text.replace("'", '')
+    # Escape XML special characters
+    text = text.replace('&', '&amp;')
+    text = text.replace('<', '&lt;')
+    text = text.replace('>', '&gt;')
+    text = text.replace('"', '&quot;')
+    text = text.replace("'", '&apos;')
     
     # Remove extra whitespace
     text = ' '.join(text.split())
@@ -86,11 +83,11 @@ def cleanup_temp():
         now = time.time()
         for f in os.listdir(TEMP_FOLDER):
             path = os.path.join(TEMP_FOLDER, f)
-            if os.path.isfile(path) and now - os.path.getmtime(path) > 600:  # 10 minutes
+            if os.path.isfile(path) and now - os.path.getmtime(path) > 600:
                 try:
                     os.remove(path)
                 except:
-                    pass  # Ignore deletion errors
+                    pass
     except Exception as e:
         print(f"Cleanup error: {e}")
 
@@ -124,8 +121,7 @@ def generate_audio():
             pitch = 0
             rate = 0
 
-        # Ensure pitch and rate are within edge_tts limits
-        # edge_tts typically accepts -50% to +50% for both pitch and rate
+        # Ensure pitch and rate are within reasonable limits
         pitch = max(-50, min(50, pitch))
         rate = max(-50, min(50, rate))
 
@@ -133,7 +129,7 @@ def generate_audio():
         voice_info = VOICE_MAP.get(language, VOICE_MAP["en"])
         voice = voice_info.get(gender, voice_info["Female"])
 
-        # Generate audio file WITHOUT SSML wrapping
+        # Generate audio file
         filename = text_to_speech(text, voice, pitch, rate)
         
         if not os.path.exists(filename) or os.path.getsize(filename) == 0:
@@ -157,8 +153,7 @@ def generate_audio():
 
 # ----------------- MAIN -----------------
 if __name__ == "__main__":
-    # Handle asyncio issues in Windows/Linux
-    if os.name == 'nt':  # Windows
+    if os.name == 'nt':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     
     # Clean temp folder on startup
