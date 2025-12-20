@@ -1,4 +1,4 @@
-flask==2.3.7
+flask==2.3.3
 flask-cors==3.1.1
 edge-tts==1.2.0
 deep-translator==1.11.1
