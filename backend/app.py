@@ -47,7 +47,7 @@ async def text_to_speech_async(text: str, voice: str, pitch: int, rate: int):
     rate_percent = 100 + rate  # SSML rate: 100% is normal, 150% is 1.5x faster
     
     # Create simple SSML without extra voices
-    ssml_text = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><prosody pitch="{pitch_percent}%" rate="{rate_percent}%">{clean_text}</prosody></speak>'
+    ssml_text = f'<speak><prosody>{clean_text}</prosody></speak>'
     
     communicate = edge_tts.Communicate(ssml_text, voice)
     await communicate.save(filename)
