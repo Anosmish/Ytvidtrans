@@ -46,13 +46,25 @@ def wake():
 
 @app.route("/generate", methods=["POST"])
 def generate_audio():
-    """Generate TTS audio from user text"""
     data = request.json
     text = data.get("text")
-    language = data.get("language", "en")  # default to English
+    voice = data.get("voice", "en-US-AriaNeural")  # full voice string
+    pitch = data.get("pitch", 0)                  # in percent
+    rate = data.get("rate", 0)                    # in percent
 
     if not text:
         return jsonify({"error": "No text provided"}), 400
+
+    # Apply pitch/rate via SSML
+    ssml_text = f'<speak><prosody pitch="{pitch}%" rate="{rate}%">{text}</prosody></speak>'
+
+    try:
+        filename = asyncio.run(text_to_speech(ssml_text, voice=voice))
+    except Exception as e:
+        return jsonify({"error": f"TTS generation failed: {str(e)}"}), 500
+
+    cleanup_temp()
+    return send_file(filename, as_attachment=True, download_name="speech.mp3")
 
     # Translate if requested language != English
     if language != "en":
