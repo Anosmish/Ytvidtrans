@@ -6,6 +6,7 @@ import os
 import uuid
 import time
 import threading
+import re
 
 # ----------------- CONFIG -----------------
 TEMP_FOLDER = "temp_audio"
@@ -17,7 +18,7 @@ CORS(app)
 # ----------------- VOICE MAPPING -----------------
 VOICE_MAP = {
     "en": {"Female": "en-US-AriaNeural", "Male": "en-US-GuyNeural"},
-    "hi": {"Female": "hi-IN-SwaraNeural", "Male": "hi-IN-MadhurNeural"},  # Fixed: Changed to correct male voice
+    "hi": {"Female": "hi-IN-SwaraNeural", "Male": "hi-IN-MadhurNeural"},
     "es": {"Female": "es-ES-ElviraNeural", "Male": "es-ES-AlvaroNeural"},
     "fr": {"Female": "fr-FR-DeniseNeural", "Male": "fr-FR-HenriNeural"},
     "de": {"Female": "de-DE-KatjaNeural", "Male": "de-DE-ConradNeural"}
@@ -33,25 +34,56 @@ def run_async(coro):
     finally:
         loop.close()
 
-async def text_to_speech_async(ssml: str, voice: str):
-    """Convert text to speech using edge-tts"""
+async def text_to_speech_async(text: str, voice: str, pitch: int, rate: int):
+    """Convert text to speech using edge-tts without extra SSML wrapping"""
     filename = os.path.join(TEMP_FOLDER, f"{uuid.uuid4()}.mp3")
-    communicate = edge_tts.Communicate(ssml, voice)
+    
+    # Clean the text - remove any special SSML tags that might be causing issues
+    clean_text = clean_user_text(text)
+    
+    # Use communicate with pitch and rate parameters directly
+    communicate = edge_tts.Communicate(
+        clean_text, 
+        voice,
+        pitch=f"{pitch}%",  # Direct pitch parameter
+        rate=f"{rate}%"     # Direct rate parameter
+    )
+    
     await communicate.save(filename)
     return filename
 
-def text_to_speech(ssml: str, voice: str):
+def text_to_speech(text: str, voice: str, pitch: int, rate: int):
     """Wrapper to run async TTS function"""
-    return run_async(text_to_speech_async(ssml, voice))
+    return run_async(text_to_speech_async(text, voice, pitch, rate))
+
+def clean_user_text(text: str) -> str:
+    """Clean user input to prevent SSML injection and remove unwanted characters"""
+    # Remove any existing SSML tags
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Replace problematic characters
+    text = text.replace('&', 'and')
+    text = text.replace('<', '')
+    text = text.replace('>', '')
+    text = text.replace('"', '')
+    text = text.replace("'", '')
+    
+    # Remove extra whitespace
+    text = ' '.join(text.split())
+    
+    return text.strip()
 
 def cleanup_temp():
-    """Delete audio files older than 60 minutes"""
+    """Delete audio files older than 10 minutes (reduced from 60)"""
     try:
         now = time.time()
         for f in os.listdir(TEMP_FOLDER):
             path = os.path.join(TEMP_FOLDER, f)
-            if os.path.isfile(path) and now - os.path.getmtime(path) > 3600:
-                os.remove(path)
+            if os.path.isfile(path) and now - os.path.getmtime(path) > 600:  # 10 minutes
+                try:
+                    os.remove(path)
+                except:
+                    pass  # Ignore deletion errors
     except Exception as e:
         print(f"Cleanup error: {e}")
 
@@ -93,15 +125,10 @@ def generate_audio():
         voice_info = VOICE_MAP.get(language, VOICE_MAP["en"])
         voice = voice_info.get(gender, voice_info["Female"])
 
-        # Create SSML with proper escaping
-        import html
-        safe_text = html.escape(text)
-        ssml_text = f'<speak><prosody pitch="{pitch}%" rate="{rate}%">{safe_text}</prosody></speak>'
-
-        # Generate audio file
-        filename = text_to_speech(ssml_text, voice=voice)
+        # Generate audio file WITHOUT SSML wrapping
+        filename = text_to_speech(text, voice, pitch, rate)
         
-        if not os.path.exists(filename):
+        if not os.path.exists(filename) or os.path.getsize(filename) == 0:
             return jsonify({"error": "Audio file generation failed"}), 500
 
         # Start cleanup in background thread
@@ -126,4 +153,13 @@ if __name__ == "__main__":
     if os.name == 'nt':  # Windows
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     
-    app.run(host="0.0.0.0", port=5000, debug=False)  # Set debug=False for production
+    # Clean temp folder on startup
+    try:
+        for f in os.listdir(TEMP_FOLDER):
+            path = os.path.join(TEMP_FOLDER, f)
+            if os.path.isfile(path):
+                os.remove(path)
+    except:
+        pass
+    
+    app.run(host="0.0.0.0", port=5000, debug=False)
