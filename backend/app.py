@@ -41,12 +41,16 @@ async def text_to_speech_async(text: str, voice: str, pitch: int, rate: int):
     # Clean the text - remove any special SSML tags that might be causing issues
     clean_text = clean_user_text(text)
     
+    # Format pitch and rate with + or - sign as required by edge_tts
+    pitch_str = f"{pitch:+d}%"  # This gives "+10%" or "-10%" format
+    rate_str = f"{rate:+d}%"    # This gives "+10%" or "-10%" format
+    
     # Use communicate with pitch and rate parameters directly
     communicate = edge_tts.Communicate(
         clean_text, 
         voice,
-        pitch=f"{pitch}%",  # Direct pitch parameter
-        rate=f"{rate}%"     # Direct rate parameter
+        pitch=pitch_str,
+        rate=rate_str
     )
     
     await communicate.save(filename)
@@ -58,6 +62,9 @@ def text_to_speech(text: str, voice: str, pitch: int, rate: int):
 
 def clean_user_text(text: str) -> str:
     """Clean user input to prevent SSML injection and remove unwanted characters"""
+    if not text:
+        return ""
+    
     # Remove any existing SSML tags
     text = re.sub(r'<[^>]+>', '', text)
     
@@ -74,7 +81,7 @@ def clean_user_text(text: str) -> str:
     return text.strip()
 
 def cleanup_temp():
-    """Delete audio files older than 10 minutes (reduced from 60)"""
+    """Delete audio files older than 10 minutes"""
     try:
         now = time.time()
         for f in os.listdir(TEMP_FOLDER):
@@ -117,7 +124,8 @@ def generate_audio():
             pitch = 0
             rate = 0
 
-        # Ensure pitch and rate are within bounds
+        # Ensure pitch and rate are within edge_tts limits
+        # edge_tts typically accepts -50% to +50% for both pitch and rate
         pitch = max(-50, min(50, pitch))
         rate = max(-50, min(50, rate))
 
@@ -162,4 +170,5 @@ if __name__ == "__main__":
     except:
         pass
     
+    print("Server starting on http://0.0.0.0:5000")
     app.run(host="0.0.0.0", port=5000, debug=False)
