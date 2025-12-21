@@ -37,10 +37,10 @@ def clean_user_text(text: str) -> str:
     if not text:
         return ""
 
-    # remove any SSML tags
+    # remove any tags
     text = re.sub(r'<[^>]+>', '', text)
 
-    # escape XML chars
+    # escape XML characters
     text = (
         text.replace("&", "&amp;")
             .replace("<", "&lt;")
@@ -56,23 +56,24 @@ async def text_to_speech_async(text: str, voice: str, pitch: int, rate: int):
 
     clean_text = clean_user_text(text)
 
-    pitch_ssml = f"{pitch:+d}%"
-    rate_ssml = f"{rate:+d}%"
+    # SSML values
+    pitch_val = f"{pitch:+d}%"
+    rate_val = f"{rate:+d}%"
 
     ssml = f"""
 <speak version="1.0">
   <voice name="{voice}">
-    <prosody pitch="{pitch_ssml}" rate="{rate_ssml}">
+    <prosody pitch="{pitch_val}" rate="{rate_val}">
       {clean_text}
     </prosody>
   </voice>
 </speak>
 """
 
+    # ✅ NO ssml=True here
     communicate = edge_tts.Communicate(
         text=ssml,
-        voice=voice,
-        ssml=True   # 🔥 MOST IMPORTANT FIX
+        voice=voice
     )
 
     await communicate.save(filename)
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     if os.name == "nt":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    # clean temp on startup
+    # clear temp folder on start
     for f in os.listdir(TEMP_FOLDER):
         try:
             os.remove(os.path.join(TEMP_FOLDER, f))
