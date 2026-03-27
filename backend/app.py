@@ -13,7 +13,12 @@ TEMP_FOLDER = "temp_audio"
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-CORS(app)
+
+CORS(
+    app,
+    resources={r"/*": {"origins": "https://ytvidtrans.netlify.app"}},
+    supports_credentials=True
+)
 
 # ---------------- VOICE MAPPING ----------------
 VOICE_MAP = {
